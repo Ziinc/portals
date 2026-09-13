@@ -8,3 +8,7 @@ erl_crash.dump
 *.beam
 /config/*.secret.exs
 .elixir_ls/
+
+# Python SDK
+__pycache__/
+*.pyc
