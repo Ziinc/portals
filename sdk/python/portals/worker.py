@@ -9,9 +9,17 @@ The socket reader is a dedicated thread independent of call execution
 (each `CALL` is submitted to a bounded thread pool), so a slow or blocked
 handler can never stall reading further frames or responding to other
 in-flight calls.
+
+Fully reentrant callbacks (protocol/v1.md section 8): a handler running
+inside a `CALL` may call back into the BEAM with `portals.callback(...)`,
+which blocks the *handler's own thread* (not the reader thread) for the
+result, so a nested `CALL` dispatched back into this same worker while
+the callback is outstanding is still served normally by another thread
+from the pool.
 """
 
 import importlib
+import itertools
 import logging
 import platform
 import threading
@@ -22,8 +30,56 @@ from . import protocol as p
 from .errors import build_error_map
 from .msgpack_codec import DecodeError, decode, encode
 from .transport import ConnectionClosed, FramedSocket, FramedStdio, socket_path_from_argv
+from .values import Pid
 
 logger = logging.getLogger("portals.worker")
+
+_thread_local = threading.local()
+
+
+class RemoteError(Exception):
+    """Raised by `callback()` when the BEAM-side handler fails."""
+
+    def __init__(self, error_map: dict):
+        self.error_map = error_map
+        super().__init__(error_map.get("message", "callback failed"))
+
+
+class ProtocolError(Exception):
+    pass
+
+
+_active_worker_lock = threading.Lock()
+_active_worker: Optional["Worker"] = None
+
+
+def callback(module: str, function: str, args: Optional[list] = None, timeout: Optional[float] = None):
+    """Invoke a BEAM callback from within a `CALL` handler and block for
+    its result. Requires a `Worker` to currently be running in this
+    process (there is exactly one per worker process)."""
+
+    worker = _active_worker
+    if worker is None:
+        raise RuntimeError("portals.callback() called with no active Worker in this process")
+    return worker.call_callback(module, function, args or [], timeout=timeout)
+
+
+def send_message(target_pid: Pid, value) -> None:
+    """Send a value to a BEAM PID (typically one received as a `CALL`
+    argument). Fire-and-forget: no acknowledgement, no exception if the
+    target no longer exists."""
+
+    worker = _active_worker
+    if worker is None:
+        raise RuntimeError("portals.send_message() called with no active Worker in this process")
+    worker.send_message(target_pid, value)
+
+
+def current_callback_depth() -> int:
+    """The reentrancy depth of the `CALL` currently executing on this
+    thread (0 outside of any call)."""
+
+    return getattr(_thread_local, "depth", 0)
 
 
 class Worker:
@@ -43,13 +99,22 @@ class Worker:
         self._shutdown = threading.Event()
         self._conn = None
 
+        self._callback_id_counter = itertools.count(1)
+        self._callback_lock = threading.Lock()
+        self._pending_callbacks: dict = {}  # callback_id -> (Event, result_box)
+
     def run(self) -> None:
+        global _active_worker
+
         if self._transport_mode == "stdio":
             self._conn = FramedStdio()
         else:
             self._conn = FramedSocket.connect_unix(self._socket_path or socket_path_from_argv())
 
         self._handshake()
+
+        with _active_worker_lock:
+            _active_worker = self
 
         try:
             while not self._shutdown.is_set():
@@ -63,6 +128,9 @@ class Worker:
 
                 self._handle_frame(payload)
         finally:
+            with _active_worker_lock:
+                if _active_worker is self:
+                    _active_worker = None
             self._executor.shutdown(wait=True)
             self._conn.close()
 
@@ -99,6 +167,45 @@ class Worker:
 
         self._limits = {**self._limits, **limits}
 
+    # -- Reentrant callbacks and messaging ----------------------------------
+
+    def call_callback(self, module: str, function: str, args: list, timeout: Optional[float] = None):
+        depth = current_callback_depth() + 1
+        callback_id = next(self._callback_id_counter)
+        event = threading.Event()
+        box = {}
+
+        with self._callback_lock:
+            self._pending_callbacks[callback_id] = (event, box)
+
+        self._send([p.CALLBACK, callback_id, module, function, args, depth])
+
+        if not event.wait(timeout=timeout):
+            with self._callback_lock:
+                self._pending_callbacks.pop(callback_id, None)
+            raise TimeoutError(f"callback {module}.{function} timed out")
+
+        if box.get("ok"):
+            return box["value"]
+        raise RemoteError(box["error"])
+
+    def send_message(self, target_pid: Pid, value) -> None:
+        self._send([p.MESSAGE, target_pid, value])
+
+    def _resolve_callback(self, callback_id: int, ok: bool, value=None, error=None) -> None:
+        with self._callback_lock:
+            entry = self._pending_callbacks.pop(callback_id, None)
+
+        if entry is None:
+            logger.warning("portals worker: unknown callback_id %s in response", callback_id)
+            return
+
+        event, box = entry
+        box["ok"] = ok
+        box["value"] = value
+        box["error"] = error
+        event.set()
+
     # -- Frame dispatch ----------------------------------------------------
 
     def _handle_frame(self, payload: bytes) -> None:
@@ -118,6 +225,12 @@ class Worker:
             self._executor.submit(self._dispatch_call, envelope[1:])
         elif tag == p.CANCEL:
             pass
+        elif tag == p.CALLBACK_RETURN:
+            callback_id, value = envelope[1:]
+            self._resolve_callback(callback_id, True, value=value)
+        elif tag == p.CALLBACK_ERROR:
+            callback_id, error_map = envelope[1:]
+            self._resolve_callback(callback_id, False, error=error_map)
         elif tag == p.PING:
             (nonce,) = envelope[1:]
             self._send([p.PONG, nonce])
@@ -129,10 +242,17 @@ class Worker:
             logger.warning("portals worker: ignoring unsupported frame tag %s", tag)
 
     def _dispatch_call(self, fields) -> None:
+        depth = 0
+        deadline_ms = None
+
         if len(fields) == 4:
             request_id, module_name, function_name, args = fields
+        elif len(fields) == 5:
+            request_id, module_name, function_name, args, deadline_ms = fields
         else:
-            request_id, module_name, function_name, args, _deadline_ms = fields
+            request_id, module_name, function_name, args, deadline_ms, depth = fields
+
+        _thread_local.depth = depth or 0
 
         try:
             module = importlib.import_module(module_name)
@@ -141,12 +261,10 @@ class Worker:
         except Exception as exc:  # noqa: BLE001 - reported to the caller, not swallowed
             self._send([p.ERROR, request_id, build_error_map(exc)])
             return
+        finally:
+            _thread_local.depth = 0
 
         self._send([p.RETURN, request_id, result])
 
     def _send(self, envelope: list) -> None:
         self._conn.send_frame(encode(envelope, self._limits))
-
-
-class ProtocolError(Exception):
-    pass

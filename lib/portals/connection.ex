@@ -34,8 +34,12 @@ defmodule Portals.Connection do
     :limits,
     :status,
     :worker_info,
+    :callback_sup,
+    :callback_allowlist,
+    message_envelope: :wrapped,
     next_request_id: 1,
-    pending: %{}
+    pending: %{},
+    callback_tasks: %{}
   ]
 
   # -- Public API -----------------------------------------------------
@@ -47,7 +51,9 @@ defmodule Portals.Connection do
           limits: Protocol.limits(),
           connect_timeout: timeout,
           handshake_timeout: timeout,
-          name: GenServer.name()
+          name: GenServer.name(),
+          callback_allowlist: [{module, atom, arity}] | nil,
+          message_envelope: :wrapped | :raw
         ]
 
   @spec start_link(start_opts) :: GenServer.on_start()
@@ -86,9 +92,18 @@ defmodule Portals.Connection do
   def async(conn, module, function, args, opts \\ []) do
     deadline = Keyword.get(opts, :deadline_ms)
     detached = Keyword.get(opts, :detach, false)
-    caller = self()
+    caller = Keyword.get(opts, :caller, self())
+    pool_notify = Keyword.get(opts, :pool_notify)
+    # Propagated automatically so a nested call made from within a
+    # callback handler (see Portals.Callback.depth/0) carries the
+    # reentrancy depth the worker should echo back on its own next
+    # CALLBACK, per protocol/v1.md section 8.
+    callback_depth = Process.get(:portals_callback_depth, 0)
 
-    GenServer.call(conn, {:dispatch, module, function, args, deadline, caller, detached})
+    GenServer.call(
+      conn,
+      {:dispatch, module, function, args, deadline, callback_depth, caller, detached, pool_notify}
+    )
   end
 
   @doc "Block the calling process until `request` completes or `timeout` elapses."
@@ -120,11 +135,15 @@ defmodule Portals.Connection do
     limits = Keyword.get(opts, :limits, Protocol.default_limits())
     connect_timeout = Keyword.get(opts, :connect_timeout, 5_000)
     handshake_timeout = Keyword.get(opts, :handshake_timeout, 5_000)
+    {:ok, callback_sup} = Task.Supervisor.start_link()
 
     state = %__MODULE__{
       transport_mod: transport_module(transport_mode),
       limits: limits,
-      status: :starting
+      status: :starting,
+      callback_sup: callback_sup,
+      callback_allowlist: Keyword.get(opts, :callback_allowlist),
+      message_envelope: Keyword.get(opts, :message_envelope, :wrapped)
     }
 
     case start_worker(opts, transport_mode, connect_timeout, handshake_timeout, state) do
@@ -135,21 +154,34 @@ defmodule Portals.Connection do
 
   @impl true
   def handle_call(
-        {:dispatch, _m, _f, _a, _d, _caller, _detach},
+        {:dispatch, _m, _f, _a, _d, _cd, _caller, _detach, _pool_notify},
         _from,
         %{status: :closed} = state
       ) do
     {:reply, {:error, Error.new(:worker_exit, "connection is closed")}, state}
   end
 
-  def handle_call({:dispatch, module, function, args, deadline, caller, detached}, _from, state) do
+  def handle_call(
+        {:dispatch, module, function, args, deadline, callback_depth, caller, detached,
+         pool_notify},
+        _from,
+        state
+      ) do
     id = state.next_request_id
-    frame = [Protocol.frame_tag(:call), id, module, function, args | opt_deadline(deadline)]
+    trailer = call_trailer(deadline, callback_depth)
+    frame = [Protocol.frame_tag(:call), id, module, function, args | trailer]
 
     case send_frame(state, frame) do
       :ok ->
         monitor_ref = unless detached, do: Process.monitor(caller)
-        entry = %{caller: caller, monitor_ref: monitor_ref, cancelled: false}
+
+        entry = %{
+          caller: caller,
+          monitor_ref: monitor_ref,
+          cancelled: false,
+          pool_notify: pool_notify
+        }
+
         state = %{state | next_request_id: id + 1, pending: Map.put(state.pending, id, entry)}
         {:reply, {:ok, %Request{connection: self(), id: id}}, state}
 
@@ -164,6 +196,7 @@ defmodule Portals.Connection do
      %{
        status: state.status,
        in_flight: map_size(state.pending),
+       in_flight_callbacks: map_size(state.callback_tasks),
        worker_info: state.worker_info
      }, state}
   end
@@ -206,22 +239,68 @@ defmodule Portals.Connection do
   def handle_info({:EXIT, port, reason}, %{lifecycle_port: port} = state),
     do: fail_all(state, :worker_exit, "worker port exited: #{inspect(reason)}")
 
-  def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
-    {ids, pending} =
-      Enum.reduce(state.pending, {[], state.pending}, fn
-        {id, %{monitor_ref: ^ref} = entry}, {ids, acc} ->
+  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
+    case find_callback_id(state, ref) do
+      {:ok, callback_id} ->
+        # The callback task crashed instead of returning normally (which
+        # always happens via the `{ref, result}` clause below) — report
+        # it as a terminal CALLBACK_ERROR instead of leaving the caller
+        # hanging forever.
+        error_map = %{
+          "kind" => "remote",
+          "message" => "callback handler crashed: #{inspect(reason)}",
+          "details" => %{},
+          "remote" => %{"language" => "elixir"}
+        }
+
+        _ = send_frame(state, [Protocol.frame_tag(:callback_error), callback_id, error_map])
+        {:noreply, %{state | callback_tasks: Map.delete(state.callback_tasks, callback_id)}}
+
+      :error ->
+        handle_owner_down(ref, pid, state)
+    end
+  end
+
+  def handle_info({ref, task_result}, state) when is_reference(ref) do
+    case find_callback_id(state, ref) do
+      {:ok, callback_id} ->
+        Process.demonitor(ref, [:flush])
+        frame = callback_result_frame(callback_id, task_result)
+        _ = send_frame(state, frame)
+        {:noreply, %{state | callback_tasks: Map.delete(state.callback_tasks, callback_id)}}
+
+      :error ->
+        {:noreply, state}
+    end
+  end
+
+  def handle_info(_other, state), do: {:noreply, state}
+
+  defp handle_owner_down(ref, _pid, state) do
+    pending =
+      Enum.reduce(state.pending, state.pending, fn
+        {id, %{monitor_ref: ^ref} = entry}, acc ->
           _ = send_frame(state, [Protocol.frame_tag(:cancel), id])
-          {[id | ids], Map.put(acc, id, %{entry | cancelled: true})}
+          Map.put(acc, id, %{entry | cancelled: true})
 
         _, acc ->
           acc
       end)
 
-    _ = ids
     {:noreply, %{state | pending: pending}}
   end
 
-  def handle_info(_other, state), do: {:noreply, state}
+  defp find_callback_id(state, ref) do
+    Enum.find_value(state.callback_tasks, :error, fn {callback_id, task_ref} ->
+      if task_ref == ref, do: {:ok, callback_id}
+    end)
+  end
+
+  defp callback_result_frame(callback_id, {:ok, value}),
+    do: [Protocol.frame_tag(:callback_return), callback_id, value]
+
+  defp callback_result_frame(callback_id, {:error, error_map}),
+    do: [Protocol.frame_tag(:callback_error), callback_id, error_map]
 
   @impl true
   def terminate(_reason, state) do
@@ -332,10 +411,98 @@ defmodule Portals.Connection do
       {:ok, {:error, [id, error_map]}} -> resolve(state, id, {:error, Error.from_wire(error_map)})
       {:ok, {:ping, [nonce]}} -> reply_pong(state, nonce)
       {:ok, {:pong, [_nonce]}} -> {:noreply, state}
+      {:ok, {:callback, fields}} -> handle_callback(fields, state)
+      {:ok, {:message, [target_pid, value]}} -> handle_message(target_pid, value, state)
       {:ok, {other, _fields}} -> unsupported_frame(state, other)
       {:error, reason} -> fail_all(state, :protocol, "invalid envelope: #{inspect(reason)}")
     end
   end
+
+  defp handle_callback([callback_id, module_str, function_str, args], state),
+    do: handle_callback(callback_id, module_str, function_str, args, 1, state)
+
+  defp handle_callback([callback_id, module_str, function_str, args, depth], state),
+    do: handle_callback(callback_id, module_str, function_str, args, depth, state)
+
+  defp handle_callback(callback_id, module_str, function_str, args, depth, state) do
+    cond do
+      depth > state.limits.max_callback_depth ->
+        reject_callback(state, callback_id, :overload, "max_callback_depth exceeded")
+
+      map_size(state.callback_tasks) >= state.limits.max_in_flight_callbacks ->
+        reject_callback(state, callback_id, :overload, "max_in_flight_callbacks exceeded")
+
+      true ->
+        case resolve_callback_target(module_str, function_str, length(args), state) do
+          {:ok, module, function} ->
+            task =
+              Task.Supervisor.async_nolink(state.callback_sup, fn ->
+                Process.put(:portals_callback_depth, depth)
+                run_callback(module, function, args)
+              end)
+
+            callback_tasks = Map.put(state.callback_tasks, callback_id, task.ref)
+            {:noreply, %{state | callback_tasks: callback_tasks}}
+
+          {:error, reason} ->
+            reject_callback(state, callback_id, :protocol, inspect(reason))
+        end
+    end
+  end
+
+  defp reject_callback(state, callback_id, kind, message) do
+    error_map = %{"kind" => Atom.to_string(kind), "message" => message, "details" => %{}}
+    _ = send_frame(state, [Protocol.frame_tag(:callback_error), callback_id, error_map])
+    {:noreply, state}
+  end
+
+  defp resolve_callback_target(module_str, function_str, arity, state) do
+    with {:ok, module} <- safe_existing_atom(module_str),
+         {:ok, function} <- safe_existing_atom(function_str),
+         :ok <- check_allowlist(state.callback_allowlist, module, function, arity) do
+      {:ok, module, function}
+    end
+  end
+
+  defp safe_existing_atom(text) do
+    {:ok, String.to_existing_atom(text)}
+  rescue
+    ArgumentError -> {:error, {:unsafe_atom, text}}
+  end
+
+  defp check_allowlist(nil, _module, _function, _arity), do: :ok
+
+  defp check_allowlist(allowlist, module, function, arity) do
+    if {module, function, arity} in allowlist do
+      :ok
+    else
+      {:error, :not_allowlisted}
+    end
+  end
+
+  defp run_callback(module, function, args) do
+    {:ok, apply(module, function, args)}
+  rescue
+    exception ->
+      {:error,
+       %{
+         "kind" => "remote",
+         "message" => Exception.message(exception),
+         "details" => %{},
+         "remote" => %{"language" => "elixir", "exception_type" => inspect(exception.__struct__)},
+         "stacktrace" => Enum.map(__STACKTRACE__, &Exception.format_stacktrace_entry/1)
+       }}
+  end
+
+  defp handle_message(target_pid, value, state) when is_pid(target_pid) do
+    send(target_pid, envelope_message(state.message_envelope, value))
+    {:noreply, state}
+  end
+
+  defp handle_message(_target, _value, state), do: {:noreply, state}
+
+  defp envelope_message(:raw, value), do: value
+  defp envelope_message(:wrapped, value), do: {:portals_message, self(), value}
 
   defp unsupported_frame(state, frame_name) do
     Logger.warning("Portals.Connection: unsupported frame #{inspect(frame_name)} ignored")
@@ -355,6 +522,7 @@ defmodule Portals.Connection do
       {entry, pending} ->
         if entry.monitor_ref, do: Process.demonitor(entry.monitor_ref, [:flush])
         send(entry.caller, {:portals_result, self(), id, result})
+        notify_pool(entry)
         {:noreply, %{state | pending: pending}}
     end
   end
@@ -365,10 +533,16 @@ defmodule Portals.Connection do
     Enum.each(state.pending, fn {id, entry} ->
       if entry.monitor_ref, do: Process.demonitor(entry.monitor_ref, [:flush])
       send(entry.caller, {:portals_result, self(), id, {:error, error}})
+      notify_pool(entry)
     end)
 
     {:noreply, %{state | pending: %{}, status: :closed}}
   end
+
+  defp notify_pool(%{pool_notify: nil}), do: :ok
+
+  defp notify_pool(%{pool_notify: pool}),
+    do: GenServer.cast(pool, {:worker_request_completed, self()})
 
   defp do_shutdown(state, deadline_ms) do
     _ = send_frame(state, [Protocol.frame_tag(:shutdown)])
@@ -385,6 +559,9 @@ defmodule Portals.Connection do
       state.transport_mod.send(state.socket, bytes)
     end
   end
+
+  defp call_trailer(deadline, 0), do: opt_deadline(deadline)
+  defp call_trailer(deadline, depth) when depth > 0, do: [deadline, depth]
 
   defp opt_deadline(nil), do: []
   defp opt_deadline(ms), do: [ms]
