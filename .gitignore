@@ -12,3 +12,6 @@ erl_crash.dump
 # Python SDK
 __pycache__/
 *.pyc
+
+# Benchmark output (Phase 8)
+bench/results/*.json

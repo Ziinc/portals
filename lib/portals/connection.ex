@@ -172,8 +172,16 @@ defmodule Portals.Connection do
     }
 
     case start_worker(opts, transport_mode, connect_timeout, handshake_timeout, state) do
-      {:ok, state} -> {:ok, state}
-      {:error, reason} -> {:stop, reason}
+      {:ok, state} ->
+        Portals.Telemetry.worker_start(%{
+          connection: self(),
+          kind: Keyword.get(opts, :worker_kind, :single)
+        })
+
+        {:ok, state}
+
+      {:error, reason} ->
+        {:stop, reason}
     end
   end
 
@@ -294,8 +302,18 @@ defmodule Portals.Connection do
           caller: caller,
           monitor_ref: monitor_ref,
           cancelled: false,
-          pool_notify: pool_notify
+          pool_notify: pool_notify,
+          telemetry_start: System.monotonic_time(),
+          module: module,
+          function: function
         }
+
+        Portals.Telemetry.call_start(%{
+          connection: self(),
+          module: module,
+          function: function,
+          request_id: id
+        })
 
         state = %{state | next_request_id: id + 1, pending: Map.put(state.pending, id, entry)}
         {:reply, {:ok, %Request{connection: self(), id: id}}, state}
@@ -835,17 +853,36 @@ defmodule Portals.Connection do
       {entry, pending} ->
         if entry.monitor_ref, do: Process.demonitor(entry.monitor_ref, [:flush])
         send(entry.caller, {:portals_result, self(), id, result})
+        emit_call_stop(entry, id, result)
         notify_pool(entry)
         {:noreply, %{state | pending: pending}}
     end
   end
 
+  defp emit_call_stop(%{telemetry_start: start} = entry, id, result) do
+    status = if match?({:ok, _}, result), do: :ok, else: :error
+
+    Portals.Telemetry.call_stop(start, status, %{
+      connection: self(),
+      module: entry.module,
+      function: entry.function,
+      request_id: id
+    })
+  end
+
+  defp emit_call_stop(_entry, _id, _result), do: :ok
+
   defp fail_all(state, kind, message) do
     error = Error.new(kind, message)
+
+    if state.status != :closed do
+      Portals.Telemetry.worker_crash(%{connection: self(), reason: kind})
+    end
 
     Enum.each(state.pending, fn {id, entry} ->
       if entry.monitor_ref, do: Process.demonitor(entry.monitor_ref, [:flush])
       send(entry.caller, {:portals_result, self(), id, {:error, error}})
+      emit_call_stop(entry, id, {:error, error})
       notify_pool(entry)
     end)
 
@@ -864,6 +901,7 @@ defmodule Portals.Connection do
     do: GenServer.cast(pool, {:worker_request_completed, self()})
 
   defp do_shutdown(state, deadline_ms) do
+    Portals.Telemetry.worker_stop(%{connection: self(), reason: :normal})
     _ = send_frame(state, [Protocol.frame_tag(:shutdown)])
     if state.lifecycle_port, do: WorkerLifecycle.Port.terminate(state.lifecycle_port, deadline_ms)
 
