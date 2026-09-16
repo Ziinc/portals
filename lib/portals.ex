@@ -65,6 +65,21 @@ defmodule Portals do
   @spec cancel(Request.t()) :: :ok
   def cancel(request), do: Connection.cancel(request)
 
+  @doc """
+  Open a bidirectional stream against `module`/`function` (FR-5).
+
+  Returns a `%Portals.Stream{}` handle; see `Portals.Stream` for the
+  explicit send/half-close/receive API and the `Enumerable` API.
+
+      {:ok, stream} = Portals.open_stream(conn, "bench_worker", "echo_stream", [])
+      :ok = Portals.Stream.send_enumerable(stream, ["a", "b"])
+      ["a", "b"] = stream |> Portals.Stream.to_enumerable() |> Enum.to_list()
+  """
+  @spec open_stream(GenServer.server(), binary, binary, list, keyword) ::
+          {:ok, Portals.Stream.t()} | {:error, Error.t()}
+  def open_stream(conn, module, function, args \\ [], opts \\ []),
+    do: Connection.open_stream(conn, module, function, args, opts)
+
   @doc "A snapshot of one worker's status and in-flight request count."
   @spec health(GenServer.server()) :: map
   def health(conn), do: Connection.health(conn)

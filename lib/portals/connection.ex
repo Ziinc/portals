@@ -21,10 +21,14 @@ defmodule Portals.Connection do
   use GenServer
   require Logger
 
-  alias Portals.{Codec, Error, Handshake, Protocol, Request, SocketDir}
+  alias Portals.{Codec, Error, Handshake, Protocol, Request, SocketDir, Stream}
   alias Portals.WorkerLifecycle
 
   @codec Codec.MessagePack
+
+  # Transport framing overhead charged against stream credit along with
+  # the encoded envelope itself (protocol/v1.md section 9).
+  @frame_prefix_bytes 4
 
   defstruct [
     :transport_mod,
@@ -39,7 +43,8 @@ defmodule Portals.Connection do
     message_envelope: :wrapped,
     next_request_id: 1,
     pending: %{},
-    callback_tasks: %{}
+    callback_tasks: %{},
+    streams: %{}
   ]
 
   # -- Public API -----------------------------------------------------
@@ -123,6 +128,26 @@ defmodule Portals.Connection do
     GenServer.cast(conn, {:cancel, id})
   end
 
+  @doc """
+  Open a bidirectional stream against `module`/`function` (FR-5).
+
+  Dispatches a `CALL` whose `request_id` doubles as the stream's
+  `stream_id`, grants the worker its initial inbound byte credit, and
+  returns a `%Portals.Stream{}` handle owned by `opts[:owner]`
+  (defaulting to the calling process). Stream capacity is bounded
+  separately from unary in-flight capacity: it is limited by the
+  `max_streams` the worker advertised in its `HELLO`.
+  """
+  @spec open_stream(GenServer.server(), binary, binary, list, keyword) ::
+          {:ok, Stream.t()} | {:error, Error.t()}
+  def open_stream(conn, module, function, args, opts \\ []) do
+    owner = Keyword.get(opts, :owner, self())
+    deadline = Keyword.get(opts, :deadline_ms)
+    callback_depth = Process.get(:portals_callback_depth, 0)
+
+    GenServer.call(conn, {:open_stream, module, function, args, deadline, callback_depth, owner})
+  end
+
   @spec health(GenServer.server()) :: map
   def health(conn), do: GenServer.call(conn, :health)
 
@@ -167,6 +192,96 @@ defmodule Portals.Connection do
         _from,
         state
       ) do
+    if map_size(state.pending) >= state.limits.max_in_flight_requests do
+      {:reply, {:error, Error.new(:overload, "max_in_flight_requests exceeded")}, state}
+    else
+      do_dispatch(
+        state,
+        module,
+        function,
+        args,
+        deadline,
+        callback_depth,
+        caller,
+        detached,
+        pool_notify
+      )
+    end
+  end
+
+  def handle_call({:open_stream, _m, _f, _a, _d, _cd, _owner}, _from, %{status: :closed} = state) do
+    {:reply, {:error, Error.new(:worker_exit, "connection is closed")}, state}
+  end
+
+  def handle_call(
+        {:open_stream, module, function, args, deadline, callback_depth, owner},
+        _from,
+        state
+      ) do
+    max_streams = advertised_max_streams(state)
+
+    cond do
+      max_streams == 0 ->
+        {:reply, {:error, Error.new(:overload, "worker advertised no stream capacity")}, state}
+
+      map_size(state.streams) >= max_streams ->
+        {:reply, {:error, Error.new(:overload, "max_streams exceeded")}, state}
+
+      true ->
+        do_open_stream(state, module, function, args, deadline, callback_depth, owner)
+    end
+  end
+
+  def handle_call({:stream_send, id, chunk}, from, state) do
+    case Map.fetch(state.streams, id) do
+      :error ->
+        {:reply, {:error, Error.new(:protocol, "unknown stream #{id}")}, state}
+
+      {:ok, %Stream.State{outbound: :closed}} ->
+        {:reply, {:error, Error.new(:protocol, "outbound direction is half-closed")}, state}
+
+      {:ok, stream} ->
+        frame = [Protocol.frame_tag(:stream_data), id, chunk]
+
+        case @codec.encode(frame, state.limits) do
+          {:ok, bytes} ->
+            attempt_send_chunk(state, stream, from, bytes)
+
+          {:error, reason} ->
+            {:reply, {:error, Error.new(:protocol, "cannot encode chunk: #{inspect(reason)}")},
+             state}
+        end
+    end
+  end
+
+  def handle_call(:health, _from, state) do
+    {:reply,
+     %{
+       status: state.status,
+       in_flight: map_size(state.pending),
+       in_flight_callbacks: map_size(state.callback_tasks),
+       open_streams: map_size(state.streams),
+       max_streams: advertised_max_streams(state),
+       worker_info: state.worker_info
+     }, state}
+  end
+
+  def handle_call({:shutdown, deadline_ms}, _from, state) do
+    do_shutdown(state, deadline_ms)
+    {:stop, :normal, :ok, %{state | status: :closed}}
+  end
+
+  defp do_dispatch(
+         state,
+         module,
+         function,
+         args,
+         deadline,
+         callback_depth,
+         caller,
+         detached,
+         pool_notify
+       ) do
     id = state.next_request_id
     trailer = call_trailer(deadline, callback_depth)
     frame = [Protocol.frame_tag(:call), id, module, function, args | trailer]
@@ -191,21 +306,6 @@ defmodule Portals.Connection do
     end
   end
 
-  def handle_call(:health, _from, state) do
-    {:reply,
-     %{
-       status: state.status,
-       in_flight: map_size(state.pending),
-       in_flight_callbacks: map_size(state.callback_tasks),
-       worker_info: state.worker_info
-     }, state}
-  end
-
-  def handle_call({:shutdown, deadline_ms}, _from, state) do
-    do_shutdown(state, deadline_ms)
-    {:stop, :normal, :ok, %{state | status: :closed}}
-  end
-
   @impl true
   def handle_cast({:cancel, id}, state) do
     case Map.fetch(state.pending, id) do
@@ -219,6 +319,41 @@ defmodule Portals.Connection do
   end
 
   def handle_cast({:local_await_timeout, _id}, state), do: {:noreply, state}
+
+  def handle_cast({:stream_half_close, id}, state) do
+    with {:ok, stream} <- Map.fetch(state.streams, id),
+         {:ok, stream} <- Stream.State.half_close_outbound(stream) do
+      _ = send_frame(state, [Protocol.frame_tag(:half_close), id])
+      {:noreply, put_stream(state, stream)}
+    else
+      _ -> {:noreply, state}
+    end
+  end
+
+  def handle_cast({:stream_cancel, id}, state) do
+    case Map.fetch(state.streams, id) do
+      {:ok, stream} ->
+        _ = send_frame(state, [Protocol.frame_tag(:cancel), id])
+
+        {:noreply,
+         release_stream(state, stream, Error.new(:cancelled, "stream #{id} was cancelled"))}
+
+      :error ->
+        {:noreply, state}
+    end
+  end
+
+  def handle_cast({:stream_consumed, id, bytes, frames}, state) do
+    case Map.fetch(state.streams, id) do
+      {:ok, stream} ->
+        {stream, grant} = Stream.State.consume_inbound(stream, bytes, frames)
+        if grant > 0, do: send_credit(state, id, grant, frames)
+        {:noreply, put_stream(state, stream)}
+
+      :error ->
+        {:noreply, state}
+    end
+  end
 
   @impl true
   def handle_info({:tcp, socket, data}, %{socket: socket} = state),
@@ -277,6 +412,16 @@ defmodule Portals.Connection do
   def handle_info(_other, state), do: {:noreply, state}
 
   defp handle_owner_down(ref, _pid, state) do
+    state =
+      Enum.reduce(state.streams, state, fn
+        {id, %Stream.State{owner_ref: ^ref} = stream}, acc ->
+          _ = send_frame(acc, [Protocol.frame_tag(:cancel), id])
+          release_stream(acc, stream, Error.new(:cancelled, "stream owner exited"))
+
+        _, acc ->
+          acc
+      end)
+
     pending =
       Enum.reduce(state.pending, state.pending, fn
         {id, %{monitor_ref: ^ref} = entry}, acc ->
@@ -395,7 +540,7 @@ defmodule Portals.Connection do
   defp handle_frame_bytes(data, state) do
     case @codec.decode(data, state.limits) do
       {:ok, envelope, <<>>} ->
-        dispatch_envelope(envelope, state)
+        dispatch_envelope(envelope, byte_size(data) + @frame_prefix_bytes, state)
 
       {:ok, _envelope, _extra} ->
         fail_all(state, :protocol, "frame carried trailing bytes")
@@ -405,7 +550,7 @@ defmodule Portals.Connection do
     end
   end
 
-  defp dispatch_envelope(envelope, state) do
+  defp dispatch_envelope(envelope, frame_size, state) do
     case Protocol.validate_envelope(envelope) do
       {:ok, {:return, [id, value]}} -> resolve(state, id, {:ok, value})
       {:ok, {:error, [id, error_map]}} -> resolve(state, id, {:error, Error.from_wire(error_map)})
@@ -413,9 +558,166 @@ defmodule Portals.Connection do
       {:ok, {:pong, [_nonce]}} -> {:noreply, state}
       {:ok, {:callback, fields}} -> handle_callback(fields, state)
       {:ok, {:message, [target_pid, value]}} -> handle_message(target_pid, value, state)
+      {:ok, {:stream_data, [id, chunk]}} -> handle_stream_data(state, id, chunk, frame_size)
+      {:ok, {:credit, fields}} -> handle_credit(state, fields)
+      {:ok, {:half_close, [id]}} -> handle_half_close(state, id)
       {:ok, {other, _fields}} -> unsupported_frame(state, other)
       {:error, reason} -> fail_all(state, :protocol, "invalid envelope: #{inspect(reason)}")
     end
+  end
+
+  # -- Streaming ----------------------------------------------------------
+
+  defp do_open_stream(state, module, function, args, deadline, callback_depth, owner) do
+    id = state.next_request_id
+    trailer = call_trailer(deadline, callback_depth)
+    frame = [Protocol.frame_tag(:call), id, module, function, args | trailer]
+    state = %{state | next_request_id: id + 1}
+
+    case send_frame(state, frame) do
+      :ok ->
+        stream =
+          Stream.State.new(id, owner,
+            owner_ref: Process.monitor(owner),
+            max_credit: state.limits.max_stream_byte_credit,
+            max_frames: state.limits.max_queued_stream_frames
+          )
+
+        # Grant the worker its initial inbound window immediately so it
+        # never has to wait a round trip before producing.
+        {stream, grant} = Stream.State.grant(stream)
+        if grant > 0, do: send_credit(state, id, grant, 0)
+
+        {:reply, {:ok, %Stream{connection: self(), id: id}}, put_stream(state, stream)}
+
+      {:error, reason} ->
+        {:reply, {:error, Error.new(:transport, inspect(reason))}, state}
+    end
+  end
+
+  defp attempt_send_chunk(state, stream, from, bytes) do
+    frame_size = byte_size(bytes) + @frame_prefix_bytes
+
+    case Stream.State.charge_send(stream, frame_size) do
+      {:ok, stream} ->
+        case state.transport_mod.send(state.socket, bytes) do
+          :ok -> {:reply, :ok, put_stream(state, stream)}
+          {:error, reason} -> {:reply, {:error, Error.new(:transport, inspect(reason))}, state}
+        end
+
+      {:error, :outbound_closed} ->
+        {:reply, {:error, Error.new(:protocol, "outbound direction is half-closed")}, state}
+
+      {:error, _backpressure} ->
+        # No credit (or no frame allowance) right now: park the sender and
+        # reply when the peer credits us, so a slow consumer blocks the
+        # producing process instead of buffering in BEAM memory.
+        stream = Stream.State.park_sender(stream, {from, bytes, frame_size})
+        {:noreply, put_stream(state, stream)}
+    end
+  end
+
+  defp handle_stream_data(state, id, chunk, frame_size) do
+    case Map.fetch(state.streams, id) do
+      :error ->
+        Logger.debug("Portals.Connection: STREAM_DATA for unknown stream #{inspect(id)}")
+        {:noreply, state}
+
+      {:ok, stream} ->
+        case Stream.State.record_inbound(stream, frame_size) do
+          {:ok, stream} ->
+            send(stream.owner, {:portals_stream, self(), id, {:data, chunk, frame_size}})
+            {:noreply, put_stream(state, stream)}
+
+          {:error, reason} ->
+            fail_stream(state, stream, "stream #{id} violated its allowance: #{inspect(reason)}")
+        end
+    end
+  end
+
+  defp handle_credit(state, [id, bytes]), do: handle_credit(state, [id, bytes, 1])
+
+  defp handle_credit(state, [id, bytes, frames]) do
+    case Map.fetch(state.streams, id) do
+      :error ->
+        {:noreply, state}
+
+      {:ok, stream} ->
+        case Stream.State.add_send_credit(stream, bytes, frames) do
+          {:ok, stream} -> drain_senders(state, stream)
+          {:error, reason} -> fail_stream(state, stream, "invalid CREDIT: #{inspect(reason)}")
+        end
+    end
+  end
+
+  defp handle_half_close(state, id) do
+    with {:ok, stream} <- Map.fetch(state.streams, id),
+         {:ok, stream} <- Stream.State.half_close_inbound(stream) do
+      send(stream.owner, {:portals_stream, self(), id, :half_closed})
+      {:noreply, put_stream(state, stream)}
+    else
+      _ -> {:noreply, state}
+    end
+  end
+
+  # Reply to as many parked senders as the freshly granted credit allows,
+  # in arrival order.
+  defp drain_senders(state, stream) do
+    case Stream.State.pop_sender(stream) do
+      :empty ->
+        {:noreply, put_stream(state, stream)}
+
+      {:ok, {from, bytes, frame_size} = waiter, rest} ->
+        case Stream.State.charge_send(rest, frame_size) do
+          {:ok, charged} ->
+            result =
+              case state.transport_mod.send(state.socket, bytes) do
+                :ok -> :ok
+                {:error, reason} -> {:error, Error.new(:transport, inspect(reason))}
+              end
+
+            GenServer.reply(from, result)
+            drain_senders(state, charged)
+
+          {:error, :outbound_closed} ->
+            GenServer.reply(
+              from,
+              {:error, Error.new(:protocol, "outbound direction is half-closed")}
+            )
+
+            drain_senders(state, rest)
+
+          {:error, _backpressure} ->
+            {:noreply, put_stream(state, Stream.State.park_sender(rest, waiter))}
+        end
+    end
+  end
+
+  defp send_credit(state, id, bytes, frames) do
+    _ = send_frame(state, [Protocol.frame_tag(:credit), id, bytes, frames])
+    :ok
+  end
+
+  defp put_stream(state, stream),
+    do: %{state | streams: Map.put(state.streams, stream.id, stream)}
+
+  # A peer that exceeds its documented allowance is a protocol violation
+  # scoped to that stream: the stream (and only the stream) is torn down.
+  defp fail_stream(state, stream, message) do
+    error = Error.new(:protocol, message)
+    Logger.warning("Portals.Connection: #{message}")
+    _ = send_frame(state, [Protocol.frame_tag(:cancel), stream.id])
+    send(stream.owner, {:portals_stream, self(), stream.id, {:closed, {:error, error}}})
+    {:noreply, release_stream(state, stream, error)}
+  end
+
+  # Release *all* local state for one stream: parked senders, the owner
+  # monitor, and the table entry.
+  defp release_stream(state, stream, error) do
+    {waiters, stream} = Stream.State.take_senders(stream)
+    Enum.each(waiters, fn {from, _bytes, _size} -> GenServer.reply(from, {:error, error}) end)
+    if stream.owner_ref, do: Process.demonitor(stream.owner_ref, [:flush])
+    %{state | streams: Map.delete(state.streams, stream.id)}
   end
 
   defp handle_callback([callback_id, module_str, function_str, args], state),
@@ -517,7 +819,18 @@ defmodule Portals.Connection do
   defp resolve(state, id, result) do
     case Map.pop(state.pending, id) do
       {nil, _pending} ->
-        {:noreply, state}
+        # A stream's terminal RETURN/ERROR arrives on the same id as the
+        # CALL that opened it; deliver it and release the stream.
+        case Map.fetch(state.streams, id) do
+          {:ok, stream} ->
+            send(stream.owner, {:portals_stream, self(), id, {:closed, result}})
+
+            {:noreply,
+             release_stream(state, stream, Error.new(:cancelled, "stream #{id} terminated"))}
+
+          :error ->
+            {:noreply, state}
+        end
 
       {entry, pending} ->
         if entry.monitor_ref, do: Process.demonitor(entry.monitor_ref, [:flush])
@@ -536,7 +849,13 @@ defmodule Portals.Connection do
       notify_pool(entry)
     end)
 
-    {:noreply, %{state | pending: %{}, status: :closed}}
+    state =
+      Enum.reduce(state.streams, state, fn {id, stream}, acc ->
+        send(stream.owner, {:portals_stream, self(), id, {:closed, {:error, error}}})
+        release_stream(acc, stream, error)
+      end)
+
+    {:noreply, %{state | pending: %{}, streams: %{}, status: :closed}}
   end
 
   defp notify_pool(%{pool_notify: nil}), do: :ok
@@ -565,6 +884,12 @@ defmodule Portals.Connection do
 
   defp opt_deadline(nil), do: []
   defp opt_deadline(ms), do: [ms]
+
+  defp advertised_max_streams(%{worker_info: %Handshake.Hello{max_streams: n}})
+       when is_integer(n) and n >= 0,
+       do: n
+
+  defp advertised_max_streams(_state), do: 0
 
   defp transport_module(:unix), do: Portals.Transport.Unix
   defp transport_module(:stdio), do: Portals.Transport.Stdio

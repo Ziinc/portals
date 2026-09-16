@@ -31,6 +31,30 @@ defmodule Portals.ProtocolTest do
     assert Protocol.frame_name(999) == :error
   end
 
+  test "stream frames validate their documented arity" do
+    assert {:ok, {:stream_data, [7, "chunk"]}} =
+             Protocol.validate_envelope([Protocol.frame_tag(:stream_data), 7, "chunk"])
+
+    assert {:error, {:bad_arity, 1}} =
+             Protocol.validate_envelope([Protocol.frame_tag(:stream_data), 7])
+
+    # CREDIT's frame_count is optional and backward compatible.
+    assert {:ok, {:credit, [7, 1024]}} =
+             Protocol.validate_envelope([Protocol.frame_tag(:credit), 7, 1024])
+
+    assert {:ok, {:credit, [7, 1024, 3]}} =
+             Protocol.validate_envelope([Protocol.frame_tag(:credit), 7, 1024, 3])
+
+    assert {:error, {:bad_arity, 4}} =
+             Protocol.validate_envelope([Protocol.frame_tag(:credit), 7, 1024, 3, 9])
+
+    assert {:ok, {:half_close, [7]}} =
+             Protocol.validate_envelope([Protocol.frame_tag(:half_close), 7])
+
+    assert {:error, {:bad_arity, 2}} =
+             Protocol.validate_envelope([Protocol.frame_tag(:half_close), 7, 1])
+  end
+
   test "validate_envelope enforces arity" do
     assert {:ok, {:cancel, [1]}} = Protocol.validate_envelope([Protocol.frame_tag(:cancel), 1])
     assert {:error, {:bad_arity, 0}} = Protocol.validate_envelope([Protocol.frame_tag(:cancel)])

@@ -27,8 +27,10 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from . import protocol as p
-from .errors import build_error_map
+from .errors import build_error_map, overload_error_map
 from .msgpack_codec import DecodeError, decode, encode
+from .streams import FRAME_PREFIX_BYTES as STREAM_FRAME_PREFIX_BYTES
+from .streams import Stream, StreamProtocolError, is_stream_handler
 from .transport import ConnectionClosed, FramedSocket, FramedStdio, socket_path_from_argv
 from .values import Pid
 
@@ -86,7 +88,7 @@ class Worker:
     def __init__(
         self,
         max_concurrency: int = 16,
-        max_streams: int = 0,
+        max_streams: int = 8,
         socket_path: Optional[str] = None,
         transport: str = "unix",
     ):
@@ -95,7 +97,17 @@ class Worker:
         self._transport_mode = transport
         self._socket_path = socket_path
         self._executor = ThreadPoolExecutor(max_workers=max_concurrency, thread_name_prefix="portals-call")
+        # Streams get their own pool so a long-lived stream handler can
+        # never consume the unary concurrency this worker advertised
+        # (PRD FR-5 / Phase 6 fairness).
+        self._stream_executor = (
+            ThreadPoolExecutor(max_workers=max_streams, thread_name_prefix="portals-stream")
+            if max_streams > 0
+            else None
+        )
         self._limits = dict(p.DEFAULT_LIMITS)
+        self._streams: dict = {}
+        self._streams_lock = threading.Lock()
         self._shutdown = threading.Event()
         self._conn = None
 
@@ -131,7 +143,10 @@ class Worker:
             with _active_worker_lock:
                 if _active_worker is self:
                     _active_worker = None
+            self._cancel_all_streams()
             self._executor.shutdown(wait=True)
+            if self._stream_executor is not None:
+                self._stream_executor.shutdown(wait=True)
             self._conn.close()
 
     # -- Handshake --------------------------------------------------------
@@ -220,11 +235,25 @@ class Worker:
             return
 
         tag = envelope[0]
+        frame_size = len(payload) + STREAM_FRAME_PREFIX_BYTES
 
         if tag == p.CALL:
-            self._executor.submit(self._dispatch_call, envelope[1:])
+            self._submit_call(envelope[1:])
         elif tag == p.CANCEL:
-            pass
+            self._cancel_stream(envelope[1])
+        elif tag == p.STREAM_DATA:
+            self._handle_stream_data(envelope[1], envelope[2], frame_size)
+        elif tag == p.CREDIT:
+            fields = envelope[1:]
+            stream_id, byte_count = fields[0], fields[1]
+            frames = fields[2] if len(fields) > 2 else 1
+            stream = self._stream(stream_id)
+            if stream is not None:
+                stream.add_send_credit(byte_count, frames)
+        elif tag == p.HALF_CLOSE:
+            stream = self._stream(envelope[1])
+            if stream is not None:
+                stream.peer_half_closed()
         elif tag == p.CALLBACK_RETURN:
             callback_id, value = envelope[1:]
             self._resolve_callback(callback_id, True, value=value)
@@ -240,6 +269,116 @@ class Worker:
             self._shutdown.set()
         else:
             logger.warning("portals worker: ignoring unsupported frame tag %s", tag)
+
+    # -- Streaming ---------------------------------------------------------
+
+    def _submit_call(self, fields) -> None:
+        """Route a CALL to the unary pool, or — when its target is marked
+        `@portals.stream_handler` — to the separate stream pool with a
+        `Stream` bound to the call's request_id."""
+
+        request_id, module_name, function_name = fields[0], fields[1], fields[2]
+        function = self._resolve_quietly(module_name, function_name)
+
+        if function is None or not is_stream_handler(function):
+            self._executor.submit(self._dispatch_call, fields)
+            return
+
+        if self._stream_executor is None:
+            self._send([p.ERROR, request_id, overload_error_map("worker advertises no streams")])
+            return
+
+        with self._streams_lock:
+            if len(self._streams) >= self._max_streams:
+                self._send(
+                    [p.ERROR, request_id, overload_error_map("max_streams exceeded")]
+                )
+                return
+
+            stream = Stream(
+                request_id,
+                self._limits["max_stream_byte_credit"],
+                self._limits["max_queued_stream_frames"],
+                self._conn.send_frame,
+                lambda envelope: encode(envelope, self._limits),
+            )
+            self._streams[request_id] = stream
+
+        grant = stream.initial_grant()
+        if grant > 0:
+            self._send([p.CREDIT, request_id, grant, 0])
+
+        self._stream_executor.submit(self._dispatch_stream_call, stream, function, fields)
+
+    @staticmethod
+    def _resolve_quietly(module_name, function_name):
+        try:
+            return getattr(importlib.import_module(module_name), function_name)
+        except Exception:  # noqa: BLE001 - the unary path reports this properly
+            return None
+
+    def _dispatch_stream_call(self, stream: Stream, function, fields) -> None:
+        request_id = fields[0]
+        args = fields[3]
+
+        try:
+            result = function(stream, *args)
+        except Exception as exc:  # noqa: BLE001 - reported as the terminal frame
+            self._release_stream(request_id)
+            if not stream.cancelled:
+                self._send([p.ERROR, request_id, build_error_map(exc)])
+            return
+
+        stream.half_close()
+        self._release_stream(request_id)
+        if not stream.cancelled:
+            self._send([p.RETURN, request_id, result])
+
+    def _stream(self, stream_id) -> Optional[Stream]:
+        with self._streams_lock:
+            return self._streams.get(stream_id)
+
+    def _release_stream(self, stream_id) -> None:
+        with self._streams_lock:
+            self._streams.pop(stream_id, None)
+
+    def _handle_stream_data(self, stream_id, chunk, frame_size: int) -> None:
+        stream = self._stream(stream_id)
+        if stream is None:
+            logger.debug("portals worker: STREAM_DATA for unknown stream %s", stream_id)
+            return
+
+        try:
+            stream.record_inbound(chunk, frame_size)
+        except StreamProtocolError as exc:
+            # A peer that exceeds its allowance loses only that stream.
+            stream.cancel()
+            self._release_stream(stream_id)
+            self._send(
+                [
+                    p.ERROR,
+                    stream_id,
+                    {
+                        "kind": "protocol",
+                        "message": str(exc),
+                        "details": {},
+                        "remote": {"language": "python"},
+                    },
+                ]
+            )
+
+    def _cancel_stream(self, stream_id) -> None:
+        stream = self._stream(stream_id)
+        if stream is not None:
+            stream.cancel()
+            self._release_stream(stream_id)
+
+    def _cancel_all_streams(self) -> None:
+        with self._streams_lock:
+            streams = list(self._streams.values())
+            self._streams.clear()
+        for stream in streams:
+            stream.cancel()
 
     def _dispatch_call(self, fields) -> None:
         depth = 0
