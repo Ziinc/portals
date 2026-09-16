@@ -70,6 +70,30 @@ Phase 5 (reentrant callbacks and PID messaging) is implemented:
   stalling the socket reader or other in-flight calls; `portals.send_message/2`
   delivers values to a PID received as a call argument.
 
+Phase 7 (Ruby and Node.js parity) is implemented:
+
+- `sdk/ruby/` — the Ruby worker SDK (`Portals::Worker`): a dependency-free
+  MessagePack codec with the Erlang value extensions, Unix-socket and
+  framed-stdio transports, a bounded thread-pool dispatcher, reentrant
+  callbacks, PID messaging, cooperative cancellation, and bidirectional
+  streaming on its own thread pool.
+- `sdk/node/` — the Node.js worker SDK (`Worker`): the same protocol
+  surface, dependency-free, with async handlers, `AsyncLocalStorage`-backed
+  call context, and a reader loop that never awaits handler execution.
+- `test/support/worker_suite.ex` — the shared black-box integration suite
+  every bundled SDK must pass, driven per SDK by
+  `test/integration/{ruby,node}_worker_test.exs`.
+- `test/conformance/sdk_conformance_test.exs` — replays
+  `protocol/vectors/golden.exs` and `protocol/malformed/fixtures.exs`
+  against all three SDKs over a language-neutral bridge, and asserts their
+  version output and protocol-mismatch diagnostics agree.
+
 Run the Elixir test suite with `mix test` (includes integration tests that
-spawn the real Python worker; requires `python3` on `PATH`). Run the Python
-SDK's own unit tests with `cd sdk/python && python3 -m unittest discover -s tests`.
+spawn real Python, Ruby and Node workers; requires `python3`, `ruby` and
+`node` on `PATH`). Each SDK also has its own unit tests:
+
+```sh
+cd sdk/python && python3 -m unittest discover -s tests
+cd sdk/ruby   && ruby -Ilib -Itest -e 'Dir["test/test_*.rb"].each { |f| require File.expand_path(f) }'
+cd sdk/node   && npm test
+```

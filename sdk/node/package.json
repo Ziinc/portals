@@ -1,0 +1,18 @@
+{
+  "name": "portals-worker",
+  "version": "1.0.0",
+  "description": "Portals Node.js worker SDK - BEAM<->Node RPC over the Portals v1 wire protocol",
+  "main": "index.js",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {},
+  "files": [
+    "index.js",
+    "lib/"
+  ]
+}

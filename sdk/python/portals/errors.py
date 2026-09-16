@@ -28,3 +28,15 @@ def build_error_map(exc: BaseException) -> dict:
         },
         "stacktrace": frames,
     }
+
+
+def overload_error_map(message: str) -> dict:
+    """A terminal `overload` error, used when the worker is at its
+    advertised stream or concurrency capacity."""
+
+    return {
+        "kind": "overload",
+        "message": message,
+        "details": {},
+        "remote": {"language": "python"},
+    }

@@ -15,4 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(_HERE, "..", "..")))
 from portals import Worker  # noqa: E402
 
 if __name__ == "__main__":
-    Worker(max_concurrency=64).run()
+    Worker(
+        max_concurrency=int(os.environ.get("PORTALS_MAX_CONCURRENCY", "64")),
+        max_streams=int(os.environ.get("PORTALS_MAX_STREAMS", "8")),
+    ).run()

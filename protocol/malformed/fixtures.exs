@@ -17,5 +17,11 @@
   {"unsafe_atom_extension", <<0xC7, 20, 1, "not_a_real_atom_xyzq">>, :unsafe_atom},
   {"invalid_extension_type", <<0xD4, 99, 0>>, :invalid_extension},
   {"bad_tuple_ext_trailing_bytes", <<0xC7, 2, 0, 0x90, 0x01>>, :trailing_bytes},
-  {"empty_binary", <<>>, :truncated}
+  {"empty_binary", <<>>, :truncated},
+  # Streaming frames (protocol/v1.md section 9). These are codec-level
+  # rejections; frame-arity rejection (e.g. a CREDIT with four fields) is
+  # checked by `Portals.Protocol.validate_envelope/1` after decoding.
+  {"truncated_stream_data_chunk",
+   <<0b1001::4, 3::4, 11, 7, 0xC4, 16, "short">>, :truncated},
+  {"truncated_credit_frame", <<0b1001::4, 3::4, 11, 7>>, :truncated}
 ]

@@ -105,7 +105,7 @@ defmodule Portals.Protocol do
   def arity(:callback_error), do: {2, 2}
   def arity(:message), do: {2, 2}
   def arity(:stream_data), do: {2, 2}
-  def arity(:credit), do: {2, 2}
+  def arity(:credit), do: {2, 3}
   def arity(:half_close), do: {1, 1}
   def arity(:ping), do: {1, 1}
   def arity(:pong), do: {1, 1}
