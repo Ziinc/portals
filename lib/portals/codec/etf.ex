@@ -18,27 +18,47 @@ defmodule Portals.Codec.ETF do
 
   @impl true
   def encode(envelope, limits) when is_list(envelope) do
-    with :ok <- check(envelope, 0, limits) do
-      body = :erlang.term_to_binary(envelope)
-      size = byte_size(body)
+    start = System.monotonic_time()
 
-      if size > limits.max_frame_size,
-        do: {:error, {:max_size_exceeded, size}},
-        else: {:ok, body}
-    end
+    result =
+      with :ok <- check(envelope, 0, limits) do
+        body = :erlang.term_to_binary(envelope)
+        size = byte_size(body)
+
+        if size > limits.max_frame_size,
+          do: {:error, {:max_size_exceeded, size}},
+          else: {:ok, body}
+      end
+
+    size = with {:ok, body} <- result, do: byte_size(body)
+    size = if is_integer(size), do: size, else: 0
+
+    Portals.Telemetry.codec_encode_stop(System.monotonic_time() - start, size, %{
+      codec: __MODULE__
+    })
+
+    result
   end
 
   @impl true
   def decode(binary, limits) when is_binary(binary) do
+    start = System.monotonic_time()
     size = byte_size(binary)
 
-    if size > limits.max_frame_size do
-      {:error, {:max_size_exceeded, size}}
-    else
-      {term, used} = :erlang.binary_to_term(binary, [:safe, :used])
-      <<_::binary-size(used), rest::binary>> = binary
-      {:ok, if(is_list(term), do: term, else: [term]), rest}
-    end
+    result =
+      if size > limits.max_frame_size do
+        {:error, {:max_size_exceeded, size}}
+      else
+        {term, used} = :erlang.binary_to_term(binary, [:safe, :used])
+        <<_::binary-size(used), rest::binary>> = binary
+        {:ok, if(is_list(term), do: term, else: [term]), rest}
+      end
+
+    Portals.Telemetry.codec_decode_stop(System.monotonic_time() - start, size, %{
+      codec: __MODULE__
+    })
+
+    result
   rescue
     ArgumentError -> {:error, {:invalid_encoding, :etf}}
   end
