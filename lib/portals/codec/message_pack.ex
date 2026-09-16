@@ -14,33 +14,57 @@ defmodule Portals.Codec.MessagePack do
 
   @impl true
   def encode(envelope, limits) when is_list(envelope) do
-    body = encode_term(envelope, 0, limits)
-    size = byte_size(body)
+    start = System.monotonic_time()
 
-    if size > limits.max_frame_size do
-      {:error, {:max_size_exceeded, size}}
-    else
-      {:ok, body}
-    end
-  catch
-    {:portals_codec_error, reason} -> {:error, reason}
+    result =
+      try do
+        body = encode_term(envelope, 0, limits)
+        size = byte_size(body)
+
+        if size > limits.max_frame_size do
+          {:error, {:max_size_exceeded, size}}
+        else
+          {:ok, body}
+        end
+      catch
+        {:portals_codec_error, reason} -> {:error, reason}
+      end
+
+    size = with {:ok, body} <- result, do: byte_size(body)
+    size = if is_integer(size), do: size, else: 0
+
+    Portals.Telemetry.codec_encode_stop(System.monotonic_time() - start, size, %{
+      codec: __MODULE__
+    })
+
+    result
   end
 
   @impl true
   def decode(binary, limits) when is_binary(binary) do
+    start = System.monotonic_time()
     size = byte_size(binary)
 
-    if size > limits.max_frame_size do
-      {:error, {:max_size_exceeded, size}}
-    else
-      case decode_term(binary, 0, limits) do
-        {:ok, term, rest} when is_list(term) -> {:ok, term, rest}
-        {:ok, term, rest} -> {:ok, [term], rest}
-        {:error, _} = err -> err
+    result =
+      if size > limits.max_frame_size do
+        {:error, {:max_size_exceeded, size}}
+      else
+        try do
+          case decode_term(binary, 0, limits) do
+            {:ok, term, rest} when is_list(term) -> {:ok, term, rest}
+            {:ok, term, rest} -> {:ok, [term], rest}
+            {:error, _} = err -> err
+          end
+        catch
+          {:portals_codec_error, reason} -> {:error, reason}
+        end
       end
-    end
-  catch
-    {:portals_codec_error, reason} -> {:error, reason}
+
+    Portals.Telemetry.codec_decode_stop(System.monotonic_time() - start, size, %{
+      codec: __MODULE__
+    })
+
+    result
   end
 
   # -- Encoding ---------------------------------------------------------

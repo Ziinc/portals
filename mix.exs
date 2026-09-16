@@ -45,6 +45,11 @@ defmodule Portals.MixProject do
   end
 
   defp deps do
-    []
+    [
+      {:telemetry, "~> 1.2"},
+      {:benchee, "~> 1.3", only: [:dev, :test], runtime: false},
+      {:benchee_json, "~> 1.0", only: [:dev, :test], runtime: false},
+      {:stream_data, "~> 0.6", only: [:dev, :test]}
+    ]
   end
 end
