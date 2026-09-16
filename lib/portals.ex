@@ -3,10 +3,15 @@ defmodule Portals do
   Public API for invoking functions in a supervised external-language
   worker (FR-2).
 
-  Through Phase 3, callers talk directly to one `Portals.Connection` (a
-  single worker). Pooling, overflow, and checkout (Phase 4) will let a
-  `Portals.Pool` name be used everywhere a connection reference is
-  accepted below, without changing this API.
+  Two entry points exist:
+
+    * `start_worker/1` (Phase 3) — one directly managed `Portals.Connection`.
+      The functions below (`call/5`, `async/5`, `await/2`, `cancel/2`,
+      `health/1`) operate on it.
+    * `start_pool/1` (Phase 4) — a supervised, load-balanced
+      `Portals.Pool` of many workers with overflow and checkout. Use
+      `Portals.Pool.call/5` etc. (same shapes as the functions below) once
+      you have a pool.
 
   ## Example
 
@@ -14,13 +19,22 @@ defmodule Portals do
         Portals.start_worker(command: "python3", args: ["priv/python_worker.py"])
 
       {:ok, "hello"} = Portals.call(conn, "bench_worker", "echo", ["hello"])
+
+      {:ok, pool} =
+        Portals.start_pool(command: "python3", args: ["priv/python_worker.py"], size: 4)
+
+      {:ok, "hello"} = Portals.Pool.call(pool, "bench_worker", "echo", ["hello"])
   """
 
-  alias Portals.{Connection, Error, Request}
+  alias Portals.{Connection, Error, Pool, Request}
 
   @doc "Start and hand-shake with one worker. See `Portals.Connection.start_link/1` for options."
   @spec start_worker(Connection.start_opts()) :: {:ok, pid} | {:error, term}
   def start_worker(opts), do: Connection.start_link(opts)
+
+  @doc "Start a supervised pool of workers. See `Portals.Pool.start_link/1` for options."
+  @spec start_pool(Pool.start_opts()) :: {:ok, pid} | {:error, term}
+  def start_pool(opts), do: Pool.start_link(opts)
 
   @doc "Stop a worker, sending `SHUTDOWN` and waiting up to `deadline_ms` before force-killing it."
   @spec stop_worker(GenServer.server(), timeout) :: :ok

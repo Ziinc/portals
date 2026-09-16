@@ -44,8 +44,12 @@ alias Portals.Codec.Bin
      1,
      %{"kind" => "remote", "message" => "boom", "details" => %{}}
    ]},
+  {"call_with_deadline_and_depth",
+   [Protocol.frame_tag(:call), 3, "bench_worker", "echo", ["nested"], 5_000, 1]},
   {"cancel", [Protocol.frame_tag(:cancel), 1]},
   {"callback", [Protocol.frame_tag(:callback), 100, "MyApp.Handler", "on_progress", [0.5]]},
+  {"callback_with_depth",
+   [Protocol.frame_tag(:callback), 101, "MyApp.Handler", "on_progress", [0.5], 2]},
   {"callback_return", [Protocol.frame_tag(:callback_return), 100, "ok"]},
   {"message_to_pid", [Protocol.frame_tag(:message), self(), %{"hello" => "world"}]},
   {"stream_data", [Protocol.frame_tag(:stream_data), 1, %Bin{data: <<1, 2, 3>>}]},

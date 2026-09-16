@@ -42,6 +42,34 @@ Phase 3 (unary RPC and the Python vertical slice) is implemented:
   arbitrary `module.function` invocation with independent concurrent
   calls (`sdk/python/portals/worker.py`).
 
+Phase 4 (pooling, overflow, deadlines, cancellation) is implemented:
+
+- `lib/portals/pool.ex` — `Portals.Pool`, a supervised set of base
+  workers plus on-demand `max_overflow` overflow workers. Least-in-flight
+  scheduling with round-robin tie-breaking; blocking checkout with an
+  independent `checkout_timeout` (execution timeout only starts once a
+  call is actually dispatched); idle overflow workers are retired
+  immediately; a crashed base worker is replaced automatically.
+- `Portals.start_pool/1` and `Portals.Pool.call/5`, `call!/5`, `async/5`,
+  `await/2`, `cancel/2`, `health/1` — the same shapes as the single-worker
+  API, now load-balanced across a pool.
+
+Phase 5 (reentrant callbacks and PID messaging) is implemented:
+
+- `Portals.Connection` now handles `CALLBACK` frames: each is dispatched
+  to an independent supervised task (never inline on the socket reader),
+  enforcing `max_callback_depth` and `max_in_flight_callbacks` and an
+  optional callback allowlist, and replies with `CALLBACK_RETURN`/
+  `CALLBACK_ERROR`. Reentrancy depth is self-reported by the trusted
+  worker and echoed back through nested `CALL`s automatically (see
+  `Portals.Callback.depth/0` and protocol/v1.md section 8).
+- `MESSAGE` frames deliver safely-decoded PIDs via ordinary `send/2`
+  (configurable `:wrapped`/`:raw` envelope).
+- `sdk/python/portals`: `portals.callback(module, function, args)` blocks
+  the calling handler's own thread for a BEAM-side result without
+  stalling the socket reader or other in-flight calls; `portals.send_message/2`
+  delivers values to a PID received as a call argument.
+
 Run the Elixir test suite with `mix test` (includes integration tests that
 spawn the real Python worker; requires `python3` on `PATH`). Run the Python
 SDK's own unit tests with `cd sdk/python && python3 -m unittest discover -s tests`.

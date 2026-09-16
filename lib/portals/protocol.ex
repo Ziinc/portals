@@ -95,12 +95,12 @@ defmodule Portals.Protocol do
   @doc "Required and optional field arity for each frame, used to validate a decoded envelope."
   @spec arity(frame_name) :: {non_neg_integer, non_neg_integer | :infinity}
   def arity(:hello), do: {5, 5}
-  def arity(:ready), do: {3, 3}
-  def arity(:call), do: {5, 6}
+  def arity(:ready), do: {2, 2}
+  def arity(:call), do: {4, 6}
   def arity(:return), do: {2, 2}
   def arity(:error), do: {2, 2}
   def arity(:cancel), do: {1, 1}
-  def arity(:callback), do: {4, 4}
+  def arity(:callback), do: {4, 5}
   def arity(:callback_return), do: {2, 2}
   def arity(:callback_error), do: {2, 2}
   def arity(:message), do: {2, 2}
