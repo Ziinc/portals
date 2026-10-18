@@ -80,6 +80,10 @@ Phase 7 (Ruby and Node.js parity) is implemented:
 - `sdk/node/` — the Node.js worker SDK (`Worker`): the same protocol
   surface, dependency-free, with async handlers, `AsyncLocalStorage`-backed
   call context, and a reader loop that never awaits handler execution.
+- `sdk/java/` — the Java worker SDK (`portals.Worker`): the same protocol
+  surface using only the JDK (21+) standard library, with `java.nio`
+  Unix-domain sockets, separate fixed thread pools for unary calls and
+  streams, and reflection-based dispatch onto plain static methods.
 - `sdk/php/` — the PHP worker SDK (`Portals\Worker`, PHP 8.1+): the same
   protocol surface, dependency-free (pure-PHP MessagePack codec with the
   Erlang value extensions and bigints, no Composer packages), with each
@@ -88,19 +92,21 @@ Phase 7 (Ruby and Node.js parity) is implemented:
   `test/integration/php_worker_test.exs` and the SDK conformance suite.
 - `test/support/worker_suite.ex` — the shared black-box integration suite
   every bundled SDK must pass, driven per SDK by
-  `test/integration/{ruby,node}_worker_test.exs`.
+  `test/integration/{ruby,node,java,php}_worker_test.exs`.
 - `test/conformance/sdk_conformance_test.exs` — replays
   `protocol/vectors/golden.exs` and `protocol/malformed/fixtures.exs`
-  against all three SDKs over a language-neutral bridge, and asserts their
+  against every bundled SDK over a language-neutral bridge, and asserts their
   version output and protocol-mismatch diagnostics agree.
 
 Run the Elixir test suite with `mix test` (includes integration tests that
-spawn real Python, Ruby, Node and PHP workers; requires `python3`, `ruby`,
-`node` and `php` on `PATH`). Each SDK also has its own unit tests:
+spawn real Python, Ruby, Node, Java and PHP workers; requires `python3`,
+`ruby`, `node`, `php`, and `java`/`javac` 21+ on `PATH` — the Java SDK is
+compiled automatically on first use). Each SDK also has its own unit tests:
 
 ```sh
 cd sdk/python && python3 -m unittest discover -s tests
 cd sdk/ruby   && ruby -Ilib -Itest -e 'Dir["test/test_*.rb"].each { |f| require File.expand_path(f) }'
 cd sdk/node   && npm test
+cd sdk/java   && ./test.sh
 cd sdk/php    && php test/run.php
 ```

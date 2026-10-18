@@ -24,6 +24,7 @@ defmodule Portals.Conformance.SdkConformanceTest do
     {"python", "python3", "sdk/python/tests/fixtures/run_worker.py"},
     {"ruby", "ruby", "sdk/ruby/test/fixtures/run_worker.rb"},
     {"node", "node", "sdk/node/test/fixtures/run_worker.js"},
+    {"java", "sh", "sdk/java/test/fixtures/run_worker.sh"},
     {"php", "php", "sdk/php/test/fixtures/run_worker.php"}
   ]
 
@@ -33,6 +34,7 @@ defmodule Portals.Conformance.SdkConformanceTest do
      [{"PORTALS_PROTOCOL_VERSION", "999"}]},
     {"node", "node", "sdk/node/test/fixtures/run_worker.js",
      [{"PORTALS_PROTOCOL_VERSION", "999"}]},
+    {"java", "sh", "sdk/java/test/fixtures/run_worker.sh", [{"PORTALS_PROTOCOL_VERSION", "999"}]},
     {"php", "php", "sdk/php/test/fixtures/run_worker.php", [{"PORTALS_PROTOCOL_VERSION", "999"}]}
   ]
 
