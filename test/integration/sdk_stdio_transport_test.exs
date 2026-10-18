@@ -11,7 +11,8 @@ defmodule Portals.Integration.SdkStdioTransportTest do
 
   @workers [
     {"ruby", "ruby", "sdk/ruby/test/fixtures/run_worker_stdio.rb"},
-    {"node", "node", "sdk/node/test/fixtures/run_worker_stdio.js"}
+    {"node", "node", "sdk/node/test/fixtures/run_worker_stdio.js"},
+    {"java", "sh", "sdk/java/test/fixtures/run_worker_stdio.sh"}
   ]
 
   for {name, runtime, path} <- @workers do
