@@ -14,9 +14,9 @@ defmodule Portals.MixProject do
     ]
   end
 
-  # All three 1.0 worker SDKs ship inside the package itself (Phase 7 exit
+  # The worker SDKs ship inside the package itself (Phase 7 exit
   # criteria), so `mix deps.get` is all an application needs to run a
-  # Python, Ruby, or Node worker.
+  # Python, Ruby, Node or Go worker.
   defp package do
     [
       licenses: ["MIT"],
@@ -30,6 +30,8 @@ defmodule Portals.MixProject do
         "sdk/node/package.json",
         "sdk/php/src",
         "sdk/php/composer.json",
+        "sdk/go/go.mod",
+        "sdk/go/*.go",
         "mix.exs",
         "README.md",
         "LICENSE"

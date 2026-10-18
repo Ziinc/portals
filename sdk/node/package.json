@@ -1,6 +1,6 @@
 {
   "name": "portals-worker",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Portals Node.js worker SDK - BEAM<->Node RPC over the Portals v1 wire protocol",
   "main": "index.js",
   "license": "MIT",

@@ -11,7 +11,7 @@
 #
 # See `protocol/v1.md` for the wire protocol.
 module Portals
-  VERSION = '1.0.0'
+  VERSION = '0.1.0'
 end
 
 require_relative 'portals/protocol'

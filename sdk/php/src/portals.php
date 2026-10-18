@@ -30,5 +30,5 @@ require_once __DIR__ . '/Stream.php';
 require_once __DIR__ . '/Worker.php';
 require_once __DIR__ . '/functions.php';
 
-const VERSION = '1.0.0';
+const VERSION = '0.1.0';
 const PROTOCOL_VERSION = Protocol::PROTOCOL_VERSION;

@@ -15,7 +15,7 @@ from portals.protocol import DEFAULT_LIMITS, PROTOCOL_VERSION
 
 # The Python SDK ships as part of this repo and has no independent release
 # cadence; the Ruby and Node SDKs report the same value.
-SDK_VERSION = "1.0.0"
+SDK_VERSION = "0.1.0"
 
 
 def echo_term(value):

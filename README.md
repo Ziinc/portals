@@ -90,18 +90,27 @@ Phase 7 (Ruby and Node.js parity) is implemented:
   call running in its own `Fiber` on a `stream_select` event loop so the
   reader never waits on handler execution; driven by
   `test/integration/php_worker_test.exs` and the SDK conformance suite.
+- `sdk/go/` — the Go worker SDK (`portals.NewWorker`): the same protocol
+  surface with only the standard library — a MessagePack codec with the
+  Erlang value extensions, Unix-socket and framed-stdio transports,
+  explicitly registered handlers running on their own goroutines (bounded
+  by `MaxConcurrency`, with streams budgeted separately), a per-call
+  `context.Context` for cooperative cancellation, reentrant callbacks, PID
+  messaging, and credit-based bidirectional streaming. The fixture
+  launcher builds the worker binary on first use.
 - `test/support/worker_suite.ex` — the shared black-box integration suite
   every bundled SDK must pass, driven per SDK by
-  `test/integration/{ruby,node,java,php}_worker_test.exs`.
+  `test/integration/{ruby,node,java,php,go}_worker_test.exs`.
 - `test/conformance/sdk_conformance_test.exs` — replays
   `protocol/vectors/golden.exs` and `protocol/malformed/fixtures.exs`
   against every bundled SDK over a language-neutral bridge, and asserts their
   version output and protocol-mismatch diagnostics agree.
 
 Run the Elixir test suite with `mix test` (includes integration tests that
-spawn real Python, Ruby, Node, Java and PHP workers; requires `python3`,
-`ruby`, `node`, `php`, and `java`/`javac` 21+ on `PATH` — the Java SDK is
-compiled automatically on first use). Each SDK also has its own unit tests:
+spawn real Python, Ruby, Node, Java, PHP and Go workers; requires `python3`,
+`ruby`, `node`, `php`, `go`, and `java`/`javac` 21+ on `PATH` — the Java and
+Go fixture workers are compiled automatically on first use). Each SDK also
+has its own unit tests:
 
 ```sh
 cd sdk/python && python3 -m unittest discover -s tests
@@ -109,4 +118,20 @@ cd sdk/ruby   && ruby -Ilib -Itest -e 'Dir["test/test_*.rb"].each { |f| require 
 cd sdk/node   && npm test
 cd sdk/java   && ./test.sh
 cd sdk/php    && php test/run.php
+cd sdk/go     && go test ./...
 ```
+
+## Releasing
+
+Every bundled SDK reports the `mix.exs` version (the conformance suite
+checks this). Each release is one commit tagged twice:
+
+```sh
+git tag vX.Y.Z          # the Hex package
+git tag sdk/go/vX.Y.Z   # the Go module (github.com/Ziinc/portals/sdk/go)
+git push origin vX.Y.Z sdk/go/vX.Y.Z
+```
+
+Go module tags are effectively immutable once fetched through
+`proxy.golang.org`; fix a bad release with a new version (and a `retract`
+directive in `sdk/go/go.mod`), never by moving the tag.
