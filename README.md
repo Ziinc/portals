@@ -8,6 +8,13 @@ supervised, pooled worker processes. Portals is a spiritual successor to
 {:ok, 2} = Portals.Pool.call(MyApp.Python, "text_tools", "word_count", ["hello world"])
 ```
 
+![A LiveView page calling a hello-world function in Python, Ruby, Node.js, PHP, Java and Go](examples/hello_live/demo/hello_live.gif)
+
+*[`examples/hello_live`](https://github.com/Ziinc/portals/tree/main/examples/hello_live):
+one LiveView page calling `greeter.hello(name)` in six supervised worker
+pools, one per language. The replies arrive independently, as each runtime
+answers.*
+
 Each worker is an ordinary program in its own language, running in its own
 OS process under OTP supervision. A crash, hang or bad output in a worker
 never takes down the BEAM. On top of plain calls you get:
@@ -82,6 +89,10 @@ iex> Portals.Pool.call(MyApp.Python, "text_tools", "word_count", ["hello world"]
 {:ok, 2}
 ```
 
+To see all six languages in one app, run the
+[`hello_live` example](https://github.com/Ziinc/portals/tree/main/examples/hello_live)
+shown at the top of this page.
+
 Start with [Getting started](guides/getting-started.md), then read the
 guide for your language. Each one walks through a complete worker covering
 calls, errors, callbacks, messages, streaming, deployment, gotchas and best
@@ -104,6 +115,7 @@ packages/portals_<language>/
   lib/                 the Portals.<Language> launch helper
   priv/<language>/     the bundled worker SDK, with its own unit tests
   test/                the shared conformance suites run against that SDK
+examples/hello_live/   a Phoenix LiveView app calling all six languages
 scripts/               test_all.sh, version.exs, release.sh
 ```
 

@@ -21,6 +21,7 @@ packages/portals_<language>/
   test/worker_suite_test.exs      Portals.Conformance.WorkerSuite against the SDK
   test/conformance_test.exs       Portals.Conformance.SDKSuite against the SDK
   test/guide/ + guide_test.exs    the language guide's example, run end to end
+examples/hello_live/              a Phoenix LiveView app calling all six languages
 scripts/                          test_all.sh, version.exs, release.sh
 ```
 
@@ -41,6 +42,11 @@ language's tooling, as listed in `scripts/test_all.sh`.
 
 Core's tests use the Python SDK from `packages/portals_python`, so core
 needs `python3` too.
+
+`scripts/test_all.sh` also runs `examples/hello_live`'s tests when every
+language is selected and Elixir is 1.15+ (Phoenix LiveView's minimum). If
+you change the page, re-record its GIF as described in that example's
+README.
 
 ## Changing an SDK
 

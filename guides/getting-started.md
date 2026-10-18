@@ -11,6 +11,10 @@ its own page with a complete walkthrough:
 [Python](python.html), [Ruby](ruby.html), [Node.js](node.html),
 [PHP](php.html), [Java](java.html) and [Go](go.html).
 
+For a working app that uses all six languages at once, see
+[`examples/hello_live`](https://github.com/Ziinc/portals/tree/main/examples/hello_live),
+a Phoenix LiveView page that calls a hello-world function in each.
+
 ## Packages
 
 Core `portals` contains the Elixir side only: pools, the connection state

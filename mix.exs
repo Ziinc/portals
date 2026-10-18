@@ -37,6 +37,8 @@ defmodule Portals.MixProject do
     [
       main: "readme",
       source_ref: "v#{@version}",
+      # The demo GIF embedded in README.md, at the same relative path.
+      assets: %{"examples/hello_live/demo" => "examples/hello_live/demo"},
       extras: [
         "README.md": [title: "Overview"],
         "guides/getting-started.md": [title: "Getting started"],

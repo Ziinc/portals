@@ -40,4 +40,14 @@ for language in $languages; do
   esac
 done
 
+# The LiveView example uses every language and needs Elixir 1.15+.
+if [ "$languages" = "python ruby node php java go" ]; then
+  if elixir -e 'System.halt(if Version.match?(System.version(), ">= 1.15.0"), do: 0, else: 1)'; then
+    section "examples/hello_live"
+    mix_checks "$root/examples/hello_live"
+  else
+    section "examples/hello_live: skipped (needs Elixir 1.15+)"
+  fi
+fi
+
 section "OK"
