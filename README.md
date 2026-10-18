@@ -120,3 +120,18 @@ cd sdk/java   && ./test.sh
 cd sdk/php    && php test/run.php
 cd sdk/go     && go test ./...
 ```
+
+## Releasing
+
+Every bundled SDK reports the `mix.exs` version (the conformance suite
+checks this). Each release is one commit tagged twice:
+
+```sh
+git tag vX.Y.Z          # the Hex package
+git tag sdk/go/vX.Y.Z   # the Go module (github.com/Ziinc/portals/sdk/go)
+git push origin vX.Y.Z sdk/go/vX.Y.Z
+```
+
+Go module tags are effectively immutable once fetched through
+`proxy.golang.org`; fix a bad release with a new version (and a `retract`
+directive in `sdk/go/go.mod`), never by moving the tag.

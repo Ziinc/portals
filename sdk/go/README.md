@@ -8,8 +8,26 @@ Standard library only: the MessagePack codec (including the Erlang value
 extensions) is implemented in `codec.go`, so a worker needs nothing but a
 Go toolchain to build.
 
+## Installing
+
+The Go SDK is versioned in lockstep with the `portals` Hex package. Each
+Hex release `X.Y.Z` is tagged `sdk/go/vX.Y.Z` on the same commit (Go
+versions a module in a subdirectory with that directory as the tag
+prefix), so require the version matching your `mix.lock`:
+
 ```sh
-go get github.com/Ziinc/portals/sdk/go
+go get github.com/Ziinc/portals/sdk/go@v0.1.0
+```
+
+The HELLO/READY handshake requires the exact same protocol version on both
+sides. To build against whatever your Elixir dependency ships instead,
+point the module at the copy inside `deps/` (the Hex package includes the
+Go sources):
+
+```
+// go.mod
+require github.com/Ziinc/portals/sdk/go v0.1.0
+replace github.com/Ziinc/portals/sdk/go => ../deps/portals/sdk/go
 ```
 
 ## Writing a worker
