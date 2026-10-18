@@ -18,6 +18,7 @@ const errors = require('./lib/errors');
 const transport = require('./lib/transport');
 const streams = require('./lib/streams');
 const worker = require('./lib/worker');
+const { runtime } = require('./lib/runtime');
 
 module.exports = {
   VERSION: '0.1.0',
@@ -29,4 +30,5 @@ module.exports = {
   ...values,
   ...streams,
   ...worker,
+  runtime,
 };

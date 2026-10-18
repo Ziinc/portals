@@ -1,13 +1,17 @@
 defmodule HelloLive.Languages do
   @moduledoc """
-  One Portals pool per language, each running a `greeter` worker whose
-  `hello/1` function answers with its runtime's version.
+  One Portals pool per language (and per JavaScript runtime), each running
+  a `greeter` worker whose `hello/1` function answers with its runtime's
+  version. The four JavaScript pools run the same `priv/js/greeter.js`.
   """
 
   @languages [
     %{id: "python", name: "Python", pool: HelloLive.Python},
     %{id: "ruby", name: "Ruby", pool: HelloLive.Ruby},
-    %{id: "node", name: "Node.js", pool: HelloLive.Node},
+    %{id: "node", name: "JavaScript · Node.js", pool: HelloLive.JS.Node},
+    %{id: "bun", name: "JavaScript · Bun", pool: HelloLive.JS.Bun},
+    %{id: "deno", name: "JavaScript · Deno", pool: HelloLive.JS.Deno},
+    %{id: "quickjs", name: "JavaScript · QuickJS", pool: HelloLive.JS.QuickJS},
     %{id: "php", name: "PHP", pool: HelloLive.PHP},
     %{id: "java", name: "Java", pool: HelloLive.Java},
     %{id: "go", name: "Go", pool: HelloLive.Go}
@@ -40,7 +44,14 @@ defmodule HelloLive.Languages do
 
   defp worker_opts("python"), do: Portals.Python.worker_opts(script: priv("python/worker.py"))
   defp worker_opts("ruby"), do: Portals.Ruby.worker_opts(script: priv("ruby/worker.rb"))
-  defp worker_opts("node"), do: Portals.Node.worker_opts(script: priv("node/worker.js"))
+
+  defp worker_opts(js) when js in ~w(node bun deno quickjs) do
+    Portals.JavaScript.worker_opts(
+      script: priv("js/worker.js"),
+      runtime: String.to_existing_atom(js)
+    )
+  end
+
   defp worker_opts("php"), do: Portals.PHP.worker_opts(script: priv("php/worker.php"))
 
   defp worker_opts("java") do

@@ -36,7 +36,8 @@ scripts/test_all.sh python go  # core + just these languages
 ```
 
 You need Elixir, plus the toolchain of each language you test: `python3`,
-`ruby`, `node`, `php`, `java`/`javac` 17+ and `go`. Inside one package,
+`ruby`, `node` (plus `bun`, `deno` and `qjs` for the other JavaScript
+runtimes), `php`, `java`/`javac` 17+ and `go`. Inside one package,
 `mix test` runs its Elixir suites. Each SDK's own unit tests run with that
 language's tooling, as listed in `scripts/test_all.sh`.
 

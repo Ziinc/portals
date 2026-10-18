@@ -9,7 +9,10 @@ defmodule HelloLiveWeb.HelloLiveTest do
   @runtimes %{
     "python" => "Python",
     "ruby" => "Ruby",
-    "node" => "Node.js",
+    "node" => "JavaScript on Node.js",
+    "bun" => "JavaScript on Bun",
+    "deno" => "JavaScript on Deno",
+    "quickjs" => "JavaScript on QuickJS",
     "php" => "PHP",
     "java" => "Java",
     "go" => "Go"

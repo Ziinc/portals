@@ -10,7 +10,7 @@ defmodule Portals.GuidesTest do
 
   @root Path.expand("../..", __DIR__)
 
-  for language <- ~w(python ruby node php java go) do
+  for language <- ~w(python ruby javascript php java go) do
     @language language
 
     test "the #{language} guide shows its tested example code verbatim" do

@@ -12,7 +12,7 @@
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-languages="python ruby node php java go"
+languages="python ruby javascript php java go"
 publish=false
 [ "${1:-}" = "--publish" ] && publish=true
 

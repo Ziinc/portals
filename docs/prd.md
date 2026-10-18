@@ -18,7 +18,7 @@ The BEAM launches and monitors each worker through a BEAM Port, but RPC data use
 
 The protocol uses MessagePack compact tagged arrays and production extensions for Erlang-specific values. Protocol compatibility is an exact-version match. ETF is implemented only as an internal benchmark codec, both as a full alternate Portals path and in isolated codec microbenchmarks; it is not a supported production codec.
 
-Portals 1.0 targets behavioral—not source-level—compatibility with ErlPort through a new public API. It must include arbitrary module/function invocation, reverse BEAM callbacks, direct message delivery, and Erlang-value fidelity. Each language SDK ships in its own Hex package (`portals_python`, `portals_ruby`, `portals_node`, and later `portals_php`, `portals_java`, `portals_go`), released in lockstep with core `portals` from one monorepo, so applications install only the languages they use. Hex is the only distribution channel.
+Portals 1.0 targets behavioral—not source-level—compatibility with ErlPort through a new public API. It must include arbitrary module/function invocation, reverse BEAM callbacks, direct message delivery, and Erlang-value fidelity. Each language SDK ships in its own Hex package (`portals_python`, `portals_ruby`, `portals_javascript`, and later `portals_php`, `portals_java`, `portals_go`), released in lockstep with core `portals` from one monorepo, so applications install only the languages they use. Hex is the only distribution channel.
 
 ZeroMQ is a regression reference rather than a release blocker. ErlPort is the replacement baseline; matching ErlPort performance is acceptable when Portals demonstrates materially better pooling, cancellation, supervision, bidirectional streaming, backpressure, telemetry, and health inspection.
 
@@ -182,6 +182,8 @@ The bundled Python, Ruby, and Node.js SDKs each implement:
 - graceful shutdown.
 
 Each SDK is bundled in the `priv/` directory of its language package, which exposes a `Portals.<Language>` module implementing `Portals.SDK`: `sdk_path/0` locates the SDK (valid in development and inside `mix release`), and `worker_opts/1` builds launch options that put it on the runtime's import path (`PYTHONPATH`, `RUBYLIB`, `NODE_PATH`, PHP `auto_prepend_file`, the Java classpath; Go workers reference it with a `go.mod` `replace` directive into `deps/`).
+
+The JavaScript SDK (`portals_javascript`) is one SDK for several runtimes: the same worker script runs on Node.js, Bun, Deno or QuickJS, selected with `Portals.JavaScript.worker_opts(runtime: ...)`. QuickJS, which has no Node APIs or sockets, runs through a bundled host shim over the stdio transport.
 
 Each SDK advertises its own unary concurrency and stream capacity. Foreign SDKs must keep the socket reader independent of handler execution so nested callbacks and out-of-order responses cannot deadlock the connection.
 
@@ -920,7 +922,7 @@ portals/
   packages/
     portals_python/      # Portals.Python + priv/python (the SDK)
     portals_ruby/
-    portals_node/
+    portals_javascript/
     portals_php/
     portals_java/
     portals_go/

@@ -1,6 +1,7 @@
 # Portals
 
-Call Python, Ruby, Node.js, PHP, Java and Go from Elixir through
+Call Python, Ruby, JavaScript (Node.js, Bun, Deno or QuickJS), PHP, Java and
+Go from Elixir through
 supervised, pooled worker processes. Portals is a spiritual successor to
 [ErlPort](https://github.com/hdima/erlport).
 
@@ -8,12 +9,12 @@ supervised, pooled worker processes. Portals is a spiritual successor to
 {:ok, 2} = Portals.Pool.call(MyApp.Python, "text_tools", "word_count", ["hello world"])
 ```
 
-![A LiveView page calling a hello-world function in Python, Ruby, Node.js, PHP, Java and Go](examples/hello_live/demo/hello_live.gif)
+![A LiveView page calling a hello-world function in Python, Ruby, JavaScript on four runtimes, PHP, Java and Go](examples/hello_live/demo/hello_live.gif)
 
 *[`examples/hello_live`](https://github.com/Ziinc/portals/tree/main/examples/hello_live):
-one LiveView page calling `greeter.hello(name)` in six supervised worker
-pools, one per language. The replies arrive independently, as each runtime
-answers.*
+one LiveView page calling `greeter.hello(name)` in a supervised worker pool
+per language, and per JavaScript runtime. The replies arrive independently,
+as each runtime answers.*
 
 Each worker is an ordinary program in its own language, running in its own
 OS process under OTP supervision. A crash, hang or bad output in a worker
@@ -41,7 +42,7 @@ Packagist, Maven or the Go module proxy.
 |---|---|---|
 | Python | [`portals_python`](https://hex.pm/packages/portals_python) | [Python guide](guides/languages/python.md) |
 | Ruby | [`portals_ruby`](https://hex.pm/packages/portals_ruby) | [Ruby guide](guides/languages/ruby.md) |
-| Node.js | [`portals_node`](https://hex.pm/packages/portals_node) | [Node.js guide](guides/languages/node.md) |
+| JavaScript (Node.js, Bun, Deno, QuickJS) | [`portals_javascript`](https://hex.pm/packages/portals_javascript) | [JavaScript guide](guides/languages/javascript.md) |
 | PHP | [`portals_php`](https://hex.pm/packages/portals_php) | [PHP guide](guides/languages/php.md) |
 | Java | [`portals_java`](https://hex.pm/packages/portals_java) | [Java guide](guides/languages/java.md) |
 | Go | [`portals_go`](https://hex.pm/packages/portals_go) | [Go guide](guides/languages/go.md) |
@@ -115,7 +116,7 @@ packages/portals_<language>/
   lib/                 the Portals.<Language> launch helper
   priv/<language>/     the bundled worker SDK, with its own unit tests
   test/                the shared conformance suites run against that SDK
-examples/hello_live/   a Phoenix LiveView app calling all six languages
+examples/hello_live/   a Phoenix LiveView app calling every language and JS runtime
 scripts/               test_all.sh, version.exs, release.sh
 ```
 

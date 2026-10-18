@@ -8,7 +8,7 @@ restarts or fails it like any other OTP process.
 
 This page covers what is the same for every language. Each language has
 its own page with a complete walkthrough:
-[Python](python.html), [Ruby](ruby.html), [Node.js](node.html),
+[Python](python.html), [Ruby](ruby.html), [JavaScript](javascript.html),
 [PHP](php.html), [Java](java.html) and [Go](go.html).
 
 For a working app that uses all six languages at once, see
@@ -26,7 +26,7 @@ languages you use:
 |---|---|---|---|
 | Python | `portals_python` | `Portals.Python` | Python 3 |
 | Ruby | `portals_ruby` | `Portals.Ruby` | Ruby 3.0+ |
-| Node.js | `portals_node` | `Portals.Node` | Node.js 18+ |
+| JavaScript | `portals_javascript` | `Portals.JavaScript` | Node.js 18+ (default), Bun, Deno 2 or QuickJS-ng |
 | PHP | `portals_php` | `Portals.PHP` | PHP 8.1+ (64-bit) |
 | Java | `portals_java` | `Portals.Java` | JDK 17+ |
 | Go | `portals_go` | `Portals.Go` | Go 1.21+ to build |
@@ -41,7 +41,7 @@ at the same version as `portals`.
 def deps do
   [
     {:portals_python, "~> 0.1.0"},
-    {:portals_node, "~> 0.1.0"}
+    {:portals_javascript, "~> 0.1.0"}
   ]
 end
 ```
@@ -193,7 +193,7 @@ terms survive a round trip:
   SDK's cancelled flag.
 - **Worker stdout and stderr are discarded** under the default Unix-socket
   transport. A `print` or a crash traceback written there never reaches your
-  logs. Log to a file (`PORTALS_LOG_FILE` in the Ruby, Node, PHP, Java and
+  logs. Log to a file (`PORTALS_LOG_FILE` in the Ruby, JavaScript, PHP, Java and
   Go SDKs; the `logging` module in Python).
 - **Streams are per worker.** `Portals.Pool` has no streaming API; open
   streams on a dedicated `Portals.start_worker/1` worker.

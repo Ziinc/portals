@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Mirrors {@code packages/portals_ruby/priv/ruby/test/test_streams.rb} and
- * {@code packages/portals_node/priv/node/portals-worker/test/streams.test.js}: the credit window, the independent
+ * {@code packages/portals_javascript/priv/javascript/portals-worker/test/streams.test.js}: the credit window, the independent
  * queued-frame cap, per-direction half-close, and cancellation.
  */
 public final class StreamTest {

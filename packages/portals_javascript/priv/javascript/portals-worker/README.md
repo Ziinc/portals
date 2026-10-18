@@ -1,17 +1,20 @@
-# Portals Node.js worker SDK
+# Portals JavaScript worker SDK
 
-A Node worker for [Portals](../../../../../README.md), implementing the v1 wire
+A JavaScript worker for [Portals](../../../../../README.md), implementing the v1 wire
 protocol in [`protocol/v1.md`](../../../../../protocol/v1.md) with full parity with
 the reference Python SDK.
 
-This SDK ships inside the `portals_node` Hex package, which also puts it
-on the worker's import path. **Application developers should start with the
-[Node.js guide](../../../../../guides/languages/node.md)**; this README documents the
-SDK itself.
+This SDK ships inside the `portals_javascript` Hex package, which also makes
+it resolvable on every supported runtime (Node.js, Bun, Deno and QuickJS).
+**Application developers should start with the
+[JavaScript guide](../../../../../guides/languages/javascript.md)**; this README
+documents the SDK itself.
 
 Zero dependencies: the MessagePack codec (including the Erlang value
 extensions) is implemented in `lib/msgpackCodec.js`, so a worker only needs
-a stock Node 18+ runtime — no `npm install` step.
+a stock runtime — no `npm install` step. It runs unchanged on Node.js 18+,
+Bun and Deno 2 (through their Node APIs), and on QuickJS through
+`../quickjs/host.mjs`, which provides the Node APIs the SDK uses.
 
 ## Writing a worker
 
@@ -60,7 +63,7 @@ new Worker({
 From Elixir:
 
 ```elixir
-{:ok, conn} = Portals.start_worker(Portals.Node.worker_opts(script: "runWorker.js"))
+{:ok, conn} = Portals.start_worker(Portals.JavaScript.worker_opts(script: "runWorker.js", runtime: :node))
 {:ok, %{"length" => 5}} = Portals.call(conn, "my_handlers", "encode", ["hello"])
 {:ok, stream} = Portals.open_stream(conn, "my_handlers", "echo_stream", [])
 ```
@@ -114,5 +117,5 @@ npm test    # node --test test/*.test.js
 ```
 
 The cross-language conformance and integration suites live on the Elixir
-side: run `mix test` in `packages/portals_node`, or
-`scripts/test_all.sh node` from the repository root.
+side: run `mix test` in `packages/portals_javascript`, or
+`scripts/test_all.sh javascript` from the repository root.

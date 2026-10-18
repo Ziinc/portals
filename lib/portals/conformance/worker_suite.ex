@@ -17,6 +17,8 @@ defmodule Portals.Conformance.WorkerSuite do
   `:worker` is evaluated when the test module compiles and must be a
   keyword list accepted by `Portals.start_worker/1`. Options a test adds
   (`:limits`, `:env`) are merged on top, with `:env` entries appended.
+  `:moduletag` adds module tags to every test in the suite, e.g.
+  `moduletag: [runtime: :deno]` to include or exclude one runtime's run.
 
   The suite needs ExUnit, so it is only usable from tests. A new language
   adapter can use it the same way: see the adapter guide.
@@ -38,6 +40,9 @@ defmodule Portals.Conformance.WorkerSuite do
       use ExUnit.Case, async: true
 
       @moduletag :integration
+      # Extra module tags (e.g. `moduletag: [runtime: :deno]`), applied here
+      # because they must be set before the suite's tests are defined.
+      @moduletag Keyword.get(opts, :moduletag, [])
 
       @worker_opts Keyword.fetch!(opts, :worker)
 

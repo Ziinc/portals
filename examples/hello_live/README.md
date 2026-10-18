@@ -1,16 +1,18 @@
 # hello_live
 
-A Phoenix LiveView page that calls a hello-world function in six
-languages: Python, Ruby, Node.js, PHP, Java and Go. Each runs in its own
-supervised `Portals.Pool`, and the six calls run concurrently, so each
-reply appears as soon as its runtime answers.
+A Phoenix LiveView page that calls a hello-world function in every
+supported language: Python, Ruby, PHP, Java, Go, and JavaScript on each of
+its four runtimes (Node.js, Bun, Deno and QuickJS). Each runs in its own
+supervised `Portals.Pool`, and the calls run concurrently, so each reply
+appears as soon as its runtime answers.
 
 ![The hello_live demo](demo/hello_live.gif)
 
 ## Run it
 
-You need Elixir 1.15+ and the six runtimes: `python3`, `ruby`, `node`,
-`php`, a JDK 17+ (`java`, `javac`) and `go`.
+You need Elixir 1.15+ and the runtimes: `python3`, `ruby`, `php`, a JDK
+17+ (`java`, `javac`), `go`, and for JavaScript `node`, `bun`, `deno` and
+`qjs` (QuickJS-ng).
 
 ```sh
 cd examples/hello_live
@@ -23,7 +25,7 @@ workers: the Java classes into `priv/java/classes` and the Go binary into
 `priv/bin/greeter_go` (see `lib/mix/tasks/hello_live.build_workers.ex`).
 
 `mix test` drives the page with `Phoenix.LiveViewTest` and checks that
-every language replies.
+every language and runtime replies.
 
 ## How it fits together
 
@@ -31,7 +33,7 @@ every language replies.
 |---|---|---|
 | Python | `priv/python/greeter.py`, `worker.py` | `Portals.Python.worker_opts(script: ...)` |
 | Ruby | `priv/ruby/greeter.rb`, `worker.rb` | `Portals.Ruby.worker_opts(script: ...)` |
-| Node.js | `priv/node/greeter.js`, `worker.js` | `Portals.Node.worker_opts(script: ...)` |
+| JavaScript | `priv/js/greeter.js`, `worker.js` (the same files on every runtime) | `Portals.JavaScript.worker_opts(script: ..., runtime: :node \| :bun \| :deno \| :quickjs)` |
 | PHP | `priv/php/Greeter.php`, `worker.php` | `Portals.PHP.worker_opts(script: ...)` |
 | Java | `priv/java/src/greeter/*.java` | `Portals.Java.worker_opts(main: "greeter.RunWorker", ...)` |
 | Go | `go/main.go` | `Portals.Go.worker_opts(binary: ...)` |

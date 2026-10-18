@@ -1,4 +1,4 @@
-defmodule PortalsNode.MixProject do
+defmodule PortalsJavaScript.MixProject do
   use Mix.Project
 
   @version "0.1.0"
@@ -12,13 +12,14 @@ defmodule PortalsNode.MixProject do
 
   def project do
     [
-      app: :portals_node,
+      app: :portals_javascript,
       version: @version,
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description:
-        "Node.js worker SDK for Portals: call Node.js from Elixir in supervised worker processes.",
+        "JavaScript worker SDK for Portals: call JavaScript from Elixir in supervised worker " <>
+          "processes on Node.js, Bun, Deno or QuickJS.",
       package: package(),
       docs: docs(),
       source_url: @source_url,
@@ -44,12 +45,17 @@ defmodule PortalsNode.MixProject do
   defp package do
     [
       licenses: ["MIT"],
-      links: %{"GitHub" => @source_url, "Guide" => "https://hexdocs.pm/portals_node/node.html"},
+      links: %{
+        "GitHub" => @source_url,
+        "Guide" => "https://hexdocs.pm/portals_javascript/javascript.html"
+      },
       files: [
         "lib",
-        "priv/node/portals-worker/index.js",
-        "priv/node/portals-worker/lib",
-        "priv/node/portals-worker/package.json",
+        "priv/javascript/portals-worker/index.js",
+        "priv/javascript/portals-worker/lib",
+        "priv/javascript/portals-worker/package.json",
+        "priv/javascript/register.cjs",
+        "priv/javascript/quickjs/host.mjs",
         "mix.exs",
         "README.md",
         "LICENSE"
@@ -59,12 +65,15 @@ defmodule PortalsNode.MixProject do
 
   defp docs do
     [
-      main: "node",
+      main: "javascript",
       source_ref: "v#{@version}",
       source_url_pattern:
-        "#{@source_url}/blob/v#{@version}/packages/portals_node/%{path}#L%{line}",
+        "#{@source_url}/blob/v#{@version}/packages/portals_javascript/%{path}#L%{line}",
       extras: [
-        "../../guides/languages/node.md": [filename: "node", title: "Node.js guide"]
+        "../../guides/languages/javascript.md": [
+          filename: "javascript",
+          title: "JavaScript guide"
+        ]
       ]
     ]
   end

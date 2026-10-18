@@ -7,11 +7,12 @@
 #     scripts/test_all.sh python go  # core plus the named languages
 #
 # Needs elixir plus each tested language's toolchain on PATH: python3,
-# ruby, node, php, java/javac 17+ and go.
+# ruby, node (plus bun, deno and qjs for the other JavaScript runtimes),
+# php, java/javac 17+ and go.
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-languages=${*:-python ruby node php java go}
+languages=${*:-python ruby javascript php java go}
 
 section() { printf '\n==> %s\n' "$1"; }
 
@@ -32,7 +33,7 @@ for language in $languages; do
   case "$language" in
     python) (cd "$package/priv/python" && python3 -m unittest discover -s tests) ;;
     ruby) (cd "$package/priv/ruby" && ruby -Ilib -Itest -e 'Dir["test/test_*.rb"].each { |f| require File.expand_path(f) }') ;;
-    node) (cd "$package/priv/node/portals-worker" && node --test test/*.test.js) ;;
+    javascript) (cd "$package/priv/javascript/portals-worker" && node --test test/*.test.js) ;;
     php) (cd "$package/priv/php" && php test/run.php) ;;
     java) (cd "$package/priv/java" && ./test.sh) ;;
     go) (cd "$package/priv/go" && go vet ./... && go test ./...) ;;
@@ -41,7 +42,7 @@ for language in $languages; do
 done
 
 # The LiveView example uses every language and needs Elixir 1.15+.
-if [ "$languages" = "python ruby node php java go" ]; then
+if [ "$languages" = "python ruby javascript php java go" ]; then
   if elixir -e 'System.halt(if Version.match?(System.version(), ">= 1.15.0"), do: 0, else: 1)'; then
     section "examples/hello_live"
     mix_checks "$root/examples/hello_live"

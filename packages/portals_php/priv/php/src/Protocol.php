@@ -8,7 +8,7 @@ namespace Portals;
  * Frame tag registry and default limits for the Portals v1 protocol.
  *
  * Mirrors `lib/portals/protocol.ex`, `packages/portals_ruby/priv/ruby/lib/portals/protocol.rb` and
- * `packages/portals_node/priv/node/portals-worker/lib/protocol.js`. See `protocol/v1.md` for the authoritative
+ * `packages/portals_javascript/priv/javascript/portals-worker/lib/protocol.js`. See `protocol/v1.md` for the authoritative
  * specification.
  */
 final class Protocol

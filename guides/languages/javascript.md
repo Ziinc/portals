@@ -1,18 +1,27 @@
-# Node.js
+# JavaScript
 
-Run JavaScript from Elixir in supervised, pooled Node.js processes. The
-`portals_node` package bundles a dependency-free worker SDK as the
-`portals-worker` module and puts it on each worker's `NODE_PATH`, so
-`require('portals-worker')` works without `npm install`. Your own npm
-dependencies keep working from your project's `node_modules`.
+Run JavaScript from Elixir in supervised, pooled worker processes, on
+**Node.js, Bun, Deno or QuickJS**. The `portals_javascript` package bundles
+one dependency-free worker SDK, the `portals-worker` module, and makes
+`require('portals-worker')` resolve to it on every runtime. You never
+`npm install` anything for Portals itself, the same worker script runs on
+all four runtimes, and you pick the runtime with one option.
 
-**Requirements:** Node.js 18 or newer on the machine that runs the
+**Requirements:** one of the runtimes below, on the machine that runs the
 workers. The SDK has no npm dependencies.
+
+| `runtime:` | Runtime | Tested with | How the SDK is found | Transport |
+|---|---|---|---|---|
+| `:node` (default) | [Node.js](https://nodejs.org) 18+ | 22 | `NODE_PATH` | Unix socket |
+| `:bun` | [Bun](https://bun.sh) | 1.4 | `NODE_PATH` | Unix socket |
+| `:deno` | [Deno](https://deno.com) 2 | 2.9 | a resolve hook preloaded with `--require` | Unix socket |
+| `:quickjs` | [QuickJS-ng](https://quickjs-ng.github.io/quickjs/) (`qjs`) | 0.17 | the bundled QuickJS host | framed stdio |
 
 This page walks through a complete worker, a `text_tools` module that
 counts words, parses integers, reports progress back to Elixir, messages a
 process and streams text. The same example exists for every language, and
-the code below is exactly the code Portals' own test suite runs.
+the code below is exactly the code Portals' own test suite runs, on all
+four runtimes.
 
 ## 1. Install
 
@@ -20,12 +29,12 @@ the code below is exactly the code Portals' own test suite runs.
 # mix.exs
 def deps do
   [
-    {:portals_node, "~> 0.1.0"}
+    {:portals_javascript, "~> 0.1.0"}
   ]
 end
 ```
 
-`portals_node` depends on `portals`, so this is the only line you need.
+`portals_javascript` depends on `portals`, so this is the only line you need.
 
 ## 2. Write the handlers
 
@@ -33,7 +42,7 @@ Handlers are plain functions exported from a CommonJS module, and may be
 `async`. Export them under the names Elixir will call.
 
 ```js
-// priv/node/textTools.js
+// priv/js/textTools.js
 'use strict';
 
 const portals = require('portals-worker');
@@ -80,7 +89,7 @@ module.exports = {
 ## 3. Write the entry script
 
 ```js
-// priv/node/worker.js
+// priv/js/worker.js
 'use strict';
 
 // Portals starts this script and appends the socket path as the last argument.
@@ -111,9 +120,10 @@ script's). `maxConcurrency` bounds how many calls run at once.
 def start(_type, _args) do
   children = [
     {Portals.Pool,
-     Portals.Node.worker_opts(
-       script: Application.app_dir(:my_app, "priv/node/worker.js"),
-       name: MyApp.Node,
+     Portals.JavaScript.worker_opts(
+       script: Application.app_dir(:my_app, "priv/js/worker.js"),
+       runtime: :node,
+       name: MyApp.JS,
        size: 4
      )}
   ]
@@ -122,20 +132,26 @@ def start(_type, _args) do
 end
 ```
 
+To switch runtimes, change `runtime:` to `:bun`, `:deno` or `:quickjs`.
+Nothing else changes: not the worker script, the handlers or the Elixir
+calls. You can even run several runtimes side by side, as separate pools.
+
 | Option | Default | Use it for |
 |---|---|---|
-| `:node` | `"node"` | A specific runtime, e.g. one installed by `nvm` or `asdf` |
-| `:node_args` | `[]` | Runtime flags, e.g. `["--max-old-space-size=512"]` |
+| `:runtime` | `:node` | `:node`, `:bun`, `:deno` or `:quickjs` |
+| `:executable` | `node`, `bun`, `deno` or `qjs` | A specific binary, e.g. one installed by `nvm`, `asdf` or `mise` |
+| `:runtime_args` | `[]` | Runtime flags, e.g. `["--max-old-space-size=512"]` for Node.js |
+| `:deno_permissions` | `["--allow-all"]` | Deno permission flags (see below) |
 | `:args` | `[]` | Arguments to your script (before the socket path Portals appends) |
 | `:env` | `[]` | Extra environment variables, e.g. `[{"NODE_ENV", "production"}]` |
 
 ## 5. Call it
 
 ```elixir
-iex> Portals.Pool.call(MyApp.Node, "text_tools", "word_count", ["hello world"])
+iex> Portals.Pool.call(MyApp.JS, "text_tools", "word_count", ["hello world"])
 {:ok, 2}
 
-iex> Portals.Pool.call(MyApp.Node, "text_tools", "parse_int", ["12"])
+iex> Portals.Pool.call(MyApp.JS, "text_tools", "parse_int", ["12"])
 {:ok, 12}
 ```
 
@@ -144,7 +160,7 @@ iex> Portals.Pool.call(MyApp.Node, "text_tools", "parse_int", ["12"])
 A thrown error (or a rejected promise) becomes a structured error:
 
 ```elixir
-iex> {:error, error} = Portals.Pool.call(MyApp.Node, "text_tools", "parse_int", ["nope"])
+iex> {:error, error} = Portals.Pool.call(MyApp.JS, "text_tools", "parse_int", ["nope"])
 iex> error.kind
 :remote
 iex> error.remote["exception_type"]
@@ -173,21 +189,21 @@ end
 ```
 
 ```elixir
-iex> Portals.Pool.call(MyApp.Node, "text_tools", "progress", [3])
+iex> Portals.Pool.call(MyApp.JS, "text_tools", "progress", [3])
 {:ok, 3}
 ```
 
 The fourth argument is a timeout in milliseconds. A failing Elixir
 function rejects with `portals.RemoteError`, and a timeout with
-`portals.CallbackTimeout`. Awaiting never blocks the worker's socket
-reader, so other calls keep flowing.
+`portals.CallbackTimeout`. Awaiting never blocks the worker's reader, so
+other calls keep flowing.
 
 ## 8. Send messages to Elixir processes
 
 A PID passed as an argument arrives as an opaque `portals.Pid`:
 
 ```elixir
-iex> Portals.Pool.call(MyApp.Node, "text_tools", "notify", [self(), "hi"])
+iex> Portals.Pool.call(MyApp.JS, "text_tools", "notify", [self(), "hi"])
 {:ok, "sent"}
 iex> flush()
 {:portals_message, #PID<0.312.0>, "HI"}
@@ -201,7 +217,7 @@ half-closes its side, and `await stream.send(chunk)` waits while Elixir's
 credit window is full. The resolved value is the stream's final result.
 
 ```elixir
-{:ok, worker} = Portals.start_worker(Portals.Node.worker_opts(script: Application.app_dir(:my_app, "priv/node/worker.js")))
+{:ok, worker} = Portals.start_worker(Portals.JS.worker_opts(script: Application.app_dir(:my_app, "priv/js/worker.js"), runtime: :node))
 
 {:ok, stream} = Portals.open_stream(worker, "text_tools", "upcase_stream", [])
 :ok = Portals.Stream.send_enumerable(stream, ["a", "b", "c"])
@@ -212,16 +228,81 @@ credit window is full. The resolved value is the stream's final result.
 Streams also have `await stream.recv(timeoutMs)` (returns `null` at the
 end), `await stream.sendAll(chunks)` and `stream.halfClose()`.
 
-## 10. Deploy
+## 10. Runtimes
 
-- Keep the JavaScript in `priv/node/` (with its own `package.json` and
+`portals.runtime()` returns `{ name, version }` for the runtime the
+worker is on (`node`, `bun`, `deno` or `quickjs`), and the worker reports
+it in its handshake (`Portals.health(worker).worker_info.runtime`).
+
+### Node.js
+
+The default and the reference runtime. The SDK's parent directory is put on
+`NODE_PATH`.
+
+### Bun
+
+Bun runs the same CommonJS worker with Node's APIs, and also resolves
+`portals-worker` through `NODE_PATH`. Bun-specific APIs (`Bun.file`,
+`bun:sqlite`, ...) are available to your handlers. ES-module workers work
+too: `import { Worker } from 'portals-worker'`.
+
+### Deno
+
+Deno runs the worker through its Node compatibility layer. Portals launches
+`deno run --allow-all --unstable-detect-cjs --require=<sdk>/register.cjs
+worker.js`:
+
+- `--unstable-detect-cjs` lets Deno run `.js` files that use `require`,
+  so the same CommonJS worker works. Alternatively, name your files
+  `.cjs`, or add a `package.json` with `"type": "commonjs"` next to them.
+- `register.cjs` makes `require('portals-worker')` resolve to the bundled
+  SDK, because Deno ignores `NODE_PATH`.
+- Permissions default to `--allow-all`, since workers are trusted code. To
+  narrow them, pass `deno_permissions:`. The SDK itself needs
+  `["--allow-read", "--allow-write", "--allow-env", "--allow-net"]`
+  (Deno counts connecting to the Unix socket as network access). Add
+  whatever else your handlers need.
+
+### QuickJS
+
+[QuickJS-ng](https://quickjs-ng.github.io/quickjs/) is a small embeddable
+engine (a 2.5 MB binary) that starts in milliseconds. A worker running
+this guide's example uses about 9 MB of memory, against about 50 MB for
+Deno. It has none of Node's APIs, so Portals runs the worker
+through a bundled host (`quickjs/host.mjs`). The host provides what the
+SDK needs: `Buffer`, `process`, timers, `require`, and minimal `path`,
+`fs` and `async_hooks`. It then loads your CommonJS worker exactly as Node
+would.
+
+Differences from the other runtimes:
+
+- **Framed stdio instead of a socket.** QuickJS has no socket API, so the
+  worker talks to the BEAM over stdin/stdout. `worker_opts/1` sets this up.
+  `console.log` is redirected to stderr so it cannot corrupt the frames;
+  QuickJS's own `print()` writes to stdout and must not be used.
+- **Only pure-JavaScript dependencies.** `require` finds relative files and
+  `node_modules` packages, but packages that need Node APIs beyond the
+  ones listed (`http`, `crypto`, `child_process`, ...) fail to load.
+- **Call context is emulated.** QuickJS has no async context tracking, so
+  `portals.currentDeadlineMs()`, `portals.isCancelled()` and the callback
+  depth follow the calls in flight like a stack. They are exact when calls
+  don't overlap, or when they nest through callbacks (the common case).
+  For long, concurrent, `await`-heavy handlers that rely on these helpers,
+  set `maxConcurrency: 1` in the worker.
+- **An interpreter, not a JIT.** CPU-heavy JavaScript is much slower than
+  on Node.js, Bun or Deno. QuickJS suits small, fast-starting workers.
+
+## 11. Deploy
+
+- Keep the JavaScript in `priv/js/` (with its own `package.json` and
   `node_modules` if you use npm packages) and build paths with
-  `Application.app_dir(:my_app, "priv/node/...")`. `mix release` copies
-  `priv/`, including the SDK bundled in `portals_node`.
-- Run `npm ci --omit=dev` for `priv/node` while building the release
-  image, and install the same Node.js major version you develop with.
-- `mix portals.sdk_path node` prints the SDK directory. For editor
-  support, add its parent directory to `NODE_PATH`, or map
+  `Application.app_dir(:my_app, "priv/js/...")`. `mix release` copies
+  `priv/`, including the SDK bundled in `portals_javascript`.
+- Install the chosen runtime in the release image. For npm dependencies,
+  run `npm ci --omit=dev` (or `bun install --production`) in `priv/js`
+  while building it.
+- `mix portals.sdk_path javascript | tail -n 1` prints the SDK directory.
+  For editor support, add its parent to `NODE_PATH`, or map
   `portals-worker` to it in `jsconfig.json` `paths`.
 
 ## Values
@@ -249,19 +330,21 @@ end), `await stream.sendAll(chunks)` and `stream.halfClose()`.
 | `portals.isCancelled()` | `true` once Elixir has cancelled the current call |
 | `portals.currentDeadlineMs()` | The `:deadline_ms` the caller attached, or `null` |
 | `portals.currentCallbackDepth()` | How deeply nested in callbacks the current call is |
+| `portals.runtime()` | `{ name, version }` of the runtime the worker runs on |
 
-The call context travels with `AsyncLocalStorage`, so these work after any
-number of `await`s.
+On Node.js, Bun and Deno the call context travels with
+`AsyncLocalStorage`, so these work after any number of `await`s. On
+QuickJS, see the note above.
 
 ## Gotchas
 
 - **One event loop per worker.** Concurrency comes from `async` I/O. A
   synchronous CPU-heavy handler blocks every other call on that worker,
   callbacks and streams included. Scale CPU work with pool `:size`, or move
-  it to `worker_threads`.
-- **ES modules don't read `NODE_PATH`.** In a `.mjs` worker,
-  `import 'portals-worker'` fails with `ERR_MODULE_NOT_FOUND`. Use
-  `createRequire`:
+  it to `worker_threads` (Node.js, Bun) or a Web Worker (Deno).
+- **Node.js ES modules don't read `NODE_PATH`.** In a `.mjs` worker on
+  Node.js, `import 'portals-worker'` fails with `ERR_MODULE_NOT_FOUND`. Use
+  `createRequire`, or run that worker on Bun:
 
   ```js
   import { createRequire } from 'node:module';
@@ -269,8 +352,12 @@ number of `await`s.
   const { Worker } = require('portals-worker');
   ```
 
-- **`NODE_PATH` has the lowest priority.** A `portals-worker` package in a
-  local `node_modules` would shadow the bundled SDK. Don't install one.
+- **`NODE_PATH` has the lowest priority.** On Node.js and Bun, a
+  `portals-worker` package in a local `node_modules` would shadow the
+  bundled SDK. Don't install one.
+- **Deno needs CommonJS detection for `.js` files.** Portals passes
+  `--unstable-detect-cjs`. If you override the Deno command yourself, keep
+  it, or use `.cjs` files.
 - **Large integers become `BigInt`.** Values beyond 2^53 arrive as `BigInt`,
   which doesn't mix with `number` arithmetic. Integral floats encode as
   integers unless wrapped in `portals.float()`.
@@ -279,8 +366,9 @@ number of `await`s.
   by U+FFFD, so the data is silently corrupted. Wrapped bytes arrive as a
   `Buffer`.
 - **`console.log` goes nowhere.** stdout and stderr are discarded under the
-  default transport. Set `PORTALS_LOG_FILE`, or pass `logger: (message) =>
-  ...` to `new Worker(...)` for the SDK's own logs.
+  default transport (on QuickJS, console output goes to stderr). Set
+  `PORTALS_LOG_FILE`, or pass `logger: (message) => ...` to
+  `new Worker(...)` for the SDK's own logs.
 - **Unregistered module names are resolved from the BEAM's working
   directory.** Register modules explicitly, or set `modulePaths: [__dirname]`.
 
@@ -288,6 +376,8 @@ number of `await`s.
 
 - Register every module in `modules:` with `require('./...')` paths
   relative to the entry script.
+- Write workers as CommonJS. The same files then run on all four runtimes,
+  and switching is a one-word change in Elixir.
 - Make handlers `async` and await I/O. Never use synchronous file or
   network APIs (`fs.readFileSync`, `execSync`) in a handler.
 - Create clients and caches at module load, and reuse them across calls.

@@ -27,7 +27,7 @@ defmodule HelloLive.MixProject do
       {:portals, path: "../..", override: true},
       {:portals_python, path: "../../packages/portals_python"},
       {:portals_ruby, path: "../../packages/portals_ruby"},
-      {:portals_node, path: "../../packages/portals_node"},
+      {:portals_javascript, path: "../../packages/portals_javascript"},
       {:portals_php, path: "../../packages/portals_php"},
       {:portals_java, path: "../../packages/portals_java"},
       {:portals_go, path: "../../packages/portals_go"},

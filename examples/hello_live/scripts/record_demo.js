@@ -18,7 +18,7 @@ const path = require('node:path');
 
 const url = process.env.DEMO_URL || 'http://localhost:4000/';
 const out = path.resolve(__dirname, '../demo/hello_live.gif');
-const viewport = { width: 1180, height: 720 };
+const viewport = { width: 1180, height: 940 };
 const scale = 2; // capture at 2x device pixels
 const outWidth = 1600; // final GIF width: sharp on HiDPI screens
 const fps = 25;

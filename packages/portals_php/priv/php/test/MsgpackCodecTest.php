@@ -18,7 +18,7 @@ use Portals\Tuple;
 
 /**
  * Mirrors `packages/portals_python/priv/python/tests/test_msgpack_codec.py`,
- * `packages/portals_ruby/priv/ruby/test/test_msgpack_codec.rb` and `packages/portals_node/priv/node/portals-worker/test/msgpackCodec.test.js`
+ * `packages/portals_ruby/priv/ruby/test/test_msgpack_codec.rb` and `packages/portals_javascript/priv/javascript/portals-worker/test/msgpackCodec.test.js`
  * so every codec is held to the same contract.
  */
 final class MsgpackCodecTest extends TestCase

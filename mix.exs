@@ -44,7 +44,7 @@ defmodule Portals.MixProject do
         "guides/getting-started.md": [title: "Getting started"],
         "guides/languages/python.md": [filename: "python", title: "Python"],
         "guides/languages/ruby.md": [filename: "ruby", title: "Ruby"],
-        "guides/languages/node.md": [filename: "node", title: "Node.js"],
+        "guides/languages/javascript.md": [filename: "javascript", title: "JavaScript"],
         "guides/languages/php.md": [filename: "php", title: "PHP"],
         "guides/languages/java.md": [filename: "java", title: "Java"],
         "guides/languages/go.md": [filename: "go", title: "Go"],

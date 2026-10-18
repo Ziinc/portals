@@ -1,8 +1,9 @@
 defmodule HelloLiveWeb.HelloLive do
   @moduledoc """
-  Calls `greeter.hello(name)` in a Python, Ruby, Node.js, PHP, Java and Go
-  worker. Each call runs as a separate async task, so the six replies
-  arrive independently.
+  Calls `greeter.hello(name)` in a Python, Ruby, PHP, Java and Go worker,
+  and in a JavaScript worker on each of Node.js, Bun, Deno and QuickJS.
+  Each call runs as a separate async task, so the replies arrive
+  independently.
   """
 
   use Phoenix.LiveView
@@ -13,6 +14,9 @@ defmodule HelloLiveWeb.HelloLive do
     "python" => "#3776ab",
     "ruby" => "#cc342d",
     "node" => "#5fa04e",
+    "bun" => "#f472b6",
+    "deno" => "#111827",
+    "quickjs" => "#e0b400",
     "php" => "#777bb4",
     "java" => "#e76f00",
     "go" => "#00add8"
@@ -62,7 +66,7 @@ defmodule HelloLiveWeb.HelloLive do
     <main>
       <h1>Hello from supported Portals languages</h1>
       <p class="lede">
-        One LiveView, one supervised Portals worker pool per language. Each button calls
+        One LiveView, one supervised Portals worker pool per runtime. Each button calls
         <code>greeter.hello(name)</code>
         in another runtime.
       </p>

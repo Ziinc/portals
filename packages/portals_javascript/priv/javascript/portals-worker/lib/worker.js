@@ -17,6 +17,7 @@
 const path = require('path');
 const fs = require('fs');
 const { AsyncLocalStorage } = require('async_hooks');
+const { runtime } = require('./runtime');
 
 const p = require('./protocol');
 const { encode, decode, DecodeError } = require('./msgpackCodec');
@@ -59,7 +60,9 @@ class Worker {
     this.maxConcurrency = options.maxConcurrency ?? 16;
     this.maxStreams = options.maxStreams ?? 8;
     this.socketPath = options.socketPath ?? null;
-    this.transportMode = options.transport ?? 'unix';
+    // QuickJS has no sockets, so Portals.JavaScript sets PORTALS_TRANSPORT
+    // to `stdio` for it; any runtime can be forced the same way.
+    this.transportMode = options.transport ?? process.env.PORTALS_TRANSPORT ?? 'unix';
     // Overridable strictly so the version-mismatch diagnostics can be
     // exercised end to end; real workers always send the SDK's version.
     this.protocolVersion = options.protocolVersion ?? p.PROTOCOL_VERSION;
@@ -136,7 +139,7 @@ class Worker {
     const hello = [
       p.HELLO,
       this.protocolVersion,
-      `node${process.versions.node}`,
+      `${runtime().name}${runtime().version}`,
       this.maxConcurrency,
       this.maxStreams,
       [],

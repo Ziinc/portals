@@ -35,6 +35,8 @@ defmodule Portals.Conformance.SDKSuite do
       stdio fallback transport. The suite adds `transport: :stdio`.
     * `:bad_version_worker` (required) — a worker that advertises protocol
       version 999 in its `HELLO`.
+    * `:moduletag` — extra module tags for every test in the suite, e.g.
+      `[runtime: :deno]`.
 
   The suite also asserts that the SDK reports the same version as the
   `portals` application, since every SDK is released in lockstep with it.
@@ -67,6 +69,9 @@ defmodule Portals.Conformance.SDKSuite do
       use ExUnit.Case, async: true
 
       @moduletag :integration
+      # Extra module tags (e.g. `moduletag: [runtime: :deno]`), applied here
+      # because they must be set before the suite's tests are defined.
+      @moduletag Keyword.get(opts, :moduletag, [])
 
       alias Portals.Conformance.Runner
 
@@ -139,6 +144,9 @@ defmodule Portals.Conformance.SDKSuite do
       # The failed handshake is logged by design; keep it out of test output.
       @tag capture_log: true
       test "#{@language}: a mismatched HELLO fails startup deterministically" do
+        # start_link: the failing worker's exit signal would kill this test.
+        Process.flag(:trap_exit, true)
+
         assert {:error, {:handshake_failed, {:protocol_version_mismatch, expected, 999}}} =
                  Portals.start_worker(@bad_version_worker_opts)
 

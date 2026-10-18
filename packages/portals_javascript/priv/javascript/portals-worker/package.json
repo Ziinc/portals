@@ -14,5 +14,6 @@
   "files": [
     "index.js",
     "lib/"
-  ]
+  ],
+  "type": "commonjs"
 }

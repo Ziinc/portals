@@ -3,7 +3,7 @@ defmodule Portals.SDK do
   The contract every `portals_<language>` package implements.
 
   Core `portals` ships no worker SDKs. Each supported language lives in its
-  own Hex package (`portals_python`, `portals_ruby`, `portals_node`,
+  own Hex package (`portals_python`, `portals_ruby`, `portals_javascript`,
   `portals_php`, `portals_java`, `portals_go`) that bundles its SDK under
   `priv/` and exposes a module implementing this behaviour:
 
@@ -32,7 +32,7 @@ defmodule Portals.SDK do
   @languages %{
     "python" => {Portals.Python, :portals_python},
     "ruby" => {Portals.Ruby, :portals_ruby},
-    "node" => {Portals.Node, :portals_node},
+    "javascript" => {Portals.JavaScript, :portals_javascript},
     "php" => {Portals.PHP, :portals_php},
     "java" => {Portals.Java, :portals_java},
     "go" => {Portals.Go, :portals_go}
