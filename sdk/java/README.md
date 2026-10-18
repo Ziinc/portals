@@ -6,7 +6,7 @@ the Python, Ruby and Node.js SDKs.
 
 No dependencies and no build tool: everything, including the MessagePack
 codec with the Erlang value extensions (`src/portals/MsgpackCodec.java`),
-uses only the JDK standard library. JDK 21+ is required (Unix-domain
+uses only the JDK standard library. JDK 17+ is required (Unix-domain
 sockets come from `java.nio`'s `UnixDomainSocketAddress`).
 
 ## Writing a worker
