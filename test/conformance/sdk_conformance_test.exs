@@ -25,7 +25,8 @@ defmodule Portals.Conformance.SdkConformanceTest do
     {"ruby", "ruby", "sdk/ruby/test/fixtures/run_worker.rb"},
     {"node", "node", "sdk/node/test/fixtures/run_worker.js"},
     {"java", "sh", "sdk/java/test/fixtures/run_worker.sh"},
-    {"php", "php", "sdk/php/test/fixtures/run_worker.php"}
+    {"php", "php", "sdk/php/test/fixtures/run_worker.php"},
+    {"go", "sh", "sdk/go/test/fixtures/run_worker.sh"}
   ]
 
   @bad_version_workers [
@@ -35,7 +36,8 @@ defmodule Portals.Conformance.SdkConformanceTest do
     {"node", "node", "sdk/node/test/fixtures/run_worker.js",
      [{"PORTALS_PROTOCOL_VERSION", "999"}]},
     {"java", "sh", "sdk/java/test/fixtures/run_worker.sh", [{"PORTALS_PROTOCOL_VERSION", "999"}]},
-    {"php", "php", "sdk/php/test/fixtures/run_worker.php", [{"PORTALS_PROTOCOL_VERSION", "999"}]}
+    {"php", "php", "sdk/php/test/fixtures/run_worker.php", [{"PORTALS_PROTOCOL_VERSION", "999"}]},
+    {"go", "sh", "sdk/go/test/fixtures/run_worker.sh", [{"PORTALS_PROTOCOL_VERSION", "999"}]}
   ]
 
   # How every SDK without a BEAM atom table must classify each malformed
