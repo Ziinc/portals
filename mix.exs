@@ -28,6 +28,8 @@ defmodule Portals.MixProject do
         "sdk/node/index.js",
         "sdk/node/lib",
         "sdk/node/package.json",
+        "sdk/php/src",
+        "sdk/php/composer.json",
         "mix.exs",
         "README.md",
         "LICENSE"
