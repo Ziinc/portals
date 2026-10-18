@@ -33,8 +33,7 @@ defmodule Portals.Conformance.SdkConformanceTest do
      [{"PORTALS_PROTOCOL_VERSION", "999"}]},
     {"node", "node", "sdk/node/test/fixtures/run_worker.js",
      [{"PORTALS_PROTOCOL_VERSION", "999"}]},
-    {"java", "sh", "sdk/java/test/fixtures/run_worker.sh",
-     [{"PORTALS_PROTOCOL_VERSION", "999"}]}
+    {"java", "sh", "sdk/java/test/fixtures/run_worker.sh", [{"PORTALS_PROTOCOL_VERSION", "999"}]}
   ]
 
   # How every SDK without a BEAM atom table must classify each malformed
