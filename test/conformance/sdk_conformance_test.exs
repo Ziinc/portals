@@ -23,7 +23,8 @@ defmodule Portals.Conformance.SdkConformanceTest do
   @sdks [
     {"python", "python3", "sdk/python/tests/fixtures/run_worker.py"},
     {"ruby", "ruby", "sdk/ruby/test/fixtures/run_worker.rb"},
-    {"node", "node", "sdk/node/test/fixtures/run_worker.js"}
+    {"node", "node", "sdk/node/test/fixtures/run_worker.js"},
+    {"java", "sh", "sdk/java/test/fixtures/run_worker.sh"}
   ]
 
   @bad_version_workers [
@@ -31,6 +32,8 @@ defmodule Portals.Conformance.SdkConformanceTest do
     {"ruby", "ruby", "sdk/ruby/test/fixtures/run_worker.rb",
      [{"PORTALS_PROTOCOL_VERSION", "999"}]},
     {"node", "node", "sdk/node/test/fixtures/run_worker.js",
+     [{"PORTALS_PROTOCOL_VERSION", "999"}]},
+    {"java", "sh", "sdk/java/test/fixtures/run_worker.sh",
      [{"PORTALS_PROTOCOL_VERSION", "999"}]}
   ]
 
