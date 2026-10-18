@@ -83,12 +83,12 @@ const cursorScript = `
   await page.mouse.move(601, 640);
   await page.waitForTimeout(900);
 
-  // Type a name and greet all six languages at once.
+  // Type a name and greet every language at once.
   await clickOn(page.locator('#name'));
   await page.keyboard.press('Control+A');
   await page.keyboard.type('Portals', { delay: 110 });
   await page.waitForTimeout(400);
-  await clickOn(page.getByRole('button', { name: 'Say hello in all six' }));
+  await clickOn(page.getByRole('button', { name: 'Say hello in all languages' }));
   await replies(6);
   await page.waitForTimeout(2200);
 

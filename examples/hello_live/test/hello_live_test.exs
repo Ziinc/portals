@@ -17,7 +17,7 @@ defmodule HelloLiveWeb.HelloLiveTest do
 
   test "every language says hello" do
     {:ok, view, html} = live(build_conn(), "/")
-    assert html =~ "Hello from six languages"
+    assert html =~ "Hello from supported Portals languages"
 
     view |> form("form.controls", name: "Portals") |> render_submit()
 

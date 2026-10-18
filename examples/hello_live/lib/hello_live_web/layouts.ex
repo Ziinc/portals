@@ -9,7 +9,7 @@ defmodule HelloLiveWeb.Layouts do
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
-        <title>Portals: hello from six languages</title>
+        <title>Hello from supported Portals languages</title>
         <style>
           * { box-sizing: border-box; }
           body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;

@@ -60,9 +60,9 @@ defmodule HelloLiveWeb.HelloLive do
 
     ~H"""
     <main>
-      <h1>Hello from six languages</h1>
+      <h1>Hello from supported Portals languages</h1>
       <p class="lede">
-        One LiveView, six supervised Portals worker pools. Each button calls
+        One LiveView, one supervised Portals worker pool per language. Each button calls
         <code>greeter.hello(name)</code>
         in another runtime.
       </p>
@@ -70,7 +70,7 @@ defmodule HelloLiveWeb.HelloLive do
       <form id="greeting" class="controls" phx-change="name" phx-submit="hello_all">
         <label for="name">Name</label>
         <input id="name" type="text" name="name" value={@name} autocomplete="off" />
-        <button class="primary" type="submit">Say hello in all six</button>
+        <button class="primary" type="submit">Say hello in all languages</button>
       </form>
 
       <div class="grid">
