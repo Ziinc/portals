@@ -20,7 +20,7 @@ const streams = require('./lib/streams');
 const worker = require('./lib/worker');
 
 module.exports = {
-  VERSION: '1.0.0',
+  VERSION: '0.1.0',
   PROTOCOL_VERSION: protocol.PROTOCOL_VERSION,
   protocol,
   codec,

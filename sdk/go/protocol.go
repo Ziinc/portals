@@ -12,7 +12,7 @@
 package portals
 
 // Version is the SDK version, reported by the conformance bridge.
-const Version = "1.0.0"
+const Version = "0.1.0"
 
 // ProtocolVersion is the wire protocol version this SDK speaks. It must
 // match the BEAM's exactly (protocol/v1.md section 4).

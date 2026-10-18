@@ -123,7 +123,8 @@ defmodule Portals.Conformance.SdkConformanceTest do
 
       assert {:ok, info} = Portals.call(conn, "conformance_worker", "version_info", [])
       assert info["protocol_version"] == Portals.Protocol.version()
-      assert info["sdk_version"] == "1.0.0"
+      # Every bundled SDK ships in lockstep with the Hex package.
+      assert info["sdk_version"] == Mix.Project.config()[:version]
       assert is_binary(info["language"])
 
       # The HELLO the BEAM accepted carries the same version plus a runtime
