@@ -57,5 +57,9 @@ With the server running:
 NODE_PATH=$(npm root -g) node scripts/record_demo.js
 ```
 
-This needs the `playwright` npm package and `ffmpeg`, and writes
-`demo/hello_live.gif`, which the README and hexdocs embed.
+This needs the `playwright` npm package, `ffmpeg` and
+[`gifski`](https://gif.ski), and writes `demo/hello_live.gif`, which the
+README and hexdocs embed. To keep the GIF sharp, frames are captured
+losslessly at 2x pixel density through the DevTools screencast (not as a
+compressed video), resampled to 25 fps, scaled once to 1600px wide and
+encoded by gifski at full quality.
