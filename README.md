@@ -80,6 +80,12 @@ Phase 7 (Ruby and Node.js parity) is implemented:
 - `sdk/node/` — the Node.js worker SDK (`Worker`): the same protocol
   surface, dependency-free, with async handlers, `AsyncLocalStorage`-backed
   call context, and a reader loop that never awaits handler execution.
+- `sdk/php/` — the PHP worker SDK (`Portals\Worker`, PHP 8.1+): the same
+  protocol surface, dependency-free (pure-PHP MessagePack codec with the
+  Erlang value extensions and bigints, no Composer packages), with each
+  call running in its own `Fiber` on a `stream_select` event loop so the
+  reader never waits on handler execution; driven by
+  `test/integration/php_worker_test.exs` and the SDK conformance suite.
 - `test/support/worker_suite.ex` — the shared black-box integration suite
   every bundled SDK must pass, driven per SDK by
   `test/integration/{ruby,node}_worker_test.exs`.
@@ -89,11 +95,12 @@ Phase 7 (Ruby and Node.js parity) is implemented:
   version output and protocol-mismatch diagnostics agree.
 
 Run the Elixir test suite with `mix test` (includes integration tests that
-spawn real Python, Ruby and Node workers; requires `python3`, `ruby` and
-`node` on `PATH`). Each SDK also has its own unit tests:
+spawn real Python, Ruby, Node and PHP workers; requires `python3`, `ruby`,
+`node` and `php` on `PATH`). Each SDK also has its own unit tests:
 
 ```sh
 cd sdk/python && python3 -m unittest discover -s tests
 cd sdk/ruby   && ruby -Ilib -Itest -e 'Dir["test/test_*.rb"].each { |f| require File.expand_path(f) }'
 cd sdk/node   && npm test
+cd sdk/php    && php test/run.php
 ```

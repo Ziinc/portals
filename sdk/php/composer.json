@@ -1,0 +1,14 @@
+{
+    "name": "portals/worker",
+    "description": "Portals PHP worker SDK - BEAM<->PHP RPC over the Portals v1 wire protocol",
+    "type": "library",
+    "license": "MIT",
+    "version": "1.0.0",
+    "require": {
+        "php": ">=8.1",
+        "ext-mbstring": "*"
+    },
+    "autoload": {
+        "files": ["src/portals.php"]
+    }
+}
