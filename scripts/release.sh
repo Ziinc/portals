@@ -30,29 +30,17 @@ git rev-parse -q --verify "refs/tags/v$version" >/dev/null && fail "tag v$versio
 section "Tests"
 scripts/test_all.sh
 
-section "Java SDK jar"
-(cd packages/portals_java && mix portals_java.jar)
-
 if [ "$publish" = false ]; then
   section "Dry run: building packages"
-  mkdir -p "$root/_build/release"
-  mix hex.build --output "$root/_build/release/portals-$version.tar"
-
-  for language in $languages; do
-    # Core is not on Hex yet, so the path dependency on it is reported as
-    # excluded; anything else (missing files, metadata) is a real error.
-    output=$(cd "packages/portals_$language" && mix hex.build \
-      --output "$root/_build/release/portals_$language-$version.tar" 2>&1) || true
-    errors=$(printf '%s\n' "$output" | sed -n '/Stopping package build/,$p' |
-      grep -v 'Stopping package build\|Dependencies excluded from the package.*: portals$' || true)
-    [ -z "$errors" ] || fail "portals_$language: $errors"
-    echo "portals_$language: package contents and metadata OK"
-  done
+  scripts/check_hex_packages.sh
 
   section "Dry run complete for v$version"
   echo "Run scripts/release.sh --publish to publish to Hex and tag v$version."
   exit 0
 fi
+
+section "Java SDK jar"
+(cd packages/portals_java && mix portals_java.jar)
 
 section "Publishing portals $version"
 mix hex.publish --yes

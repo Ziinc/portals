@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs everything CI should run, for core and every language package:
+# Runs everything CI runs, for core and every language package: lint,
 # formatting, compiler warnings, the Elixir suites (which launch real
 # workers) and each SDK's own unit tests.
 #
@@ -8,44 +8,37 @@
 #
 # Needs elixir plus each tested language's toolchain on PATH: python3,
 # ruby, node (plus bun, deno and qjs for the other JavaScript runtimes),
-# php, java/javac 17+ and go.
+# php, java/javac 17+ and go. Lint (all languages only) also
+# needs ruff and shellcheck.
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 languages=${*:-python ruby javascript php java go}
+all="python ruby javascript php java go"
 
 section() { printf '\n==> %s\n' "$1"; }
 
-mix_checks() {
-  (cd "$1" && mix deps.get >/dev/null && mix format --check-formatted &&
-    MIX_ENV=test mix compile --warnings-as-errors && mix test)
-}
+if [ "$languages" = "$all" ]; then
+  section "lint"
+  "$root/scripts/lint.sh"
+fi
 
 section "portals (core)"
-mix_checks "$root"
+"$root/scripts/check_project.sh" "$root"
 
 for language in $languages; do
-  package="$root/packages/portals_$language"
   section "portals_$language"
-  mix_checks "$package"
+  "$root/scripts/check_project.sh" "$root/packages/portals_$language"
 
   section "portals_$language: SDK unit tests"
-  case "$language" in
-    python) (cd "$package/priv/python" && python3 -m unittest discover -s tests) ;;
-    ruby) (cd "$package/priv/ruby" && ruby -Ilib -Itest -e 'Dir["test/test_*.rb"].each { |f| require File.expand_path(f) }') ;;
-    javascript) (cd "$package/priv/javascript/portals-worker" && node --test test/*.test.js) ;;
-    php) (cd "$package/priv/php" && php test/run.php) ;;
-    java) (cd "$package/priv/java" && ./test.sh) ;;
-    go) (cd "$package/priv/go" && go vet ./... && go test ./...) ;;
-    *) echo "unknown language: $language" >&2; exit 1 ;;
-  esac
+  "$root/scripts/sdk_tests.sh" "$language"
 done
 
 # The LiveView example uses every language and needs Elixir 1.15+.
-if [ "$languages" = "python ruby javascript php java go" ]; then
+if [ "$languages" = "$all" ]; then
   if elixir -e 'System.halt(if Version.match?(System.version(), ">= 1.15.0"), do: 0, else: 1)'; then
     section "examples/hello_live"
-    mix_checks "$root/examples/hello_live"
+    "$root/scripts/check_project.sh" "$root/examples/hello_live"
   else
     section "examples/hello_live: skipped (needs Elixir 1.15+)"
   fi

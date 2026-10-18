@@ -49,6 +49,23 @@ language is selected and Elixir is 1.15+ (Phoenix LiveView's minimum). If
 you change the page, re-record its GIF as described in that example's
 README.
 
+## CI
+
+`.github/workflows/ci.yml` runs on every pull request and on `main`, using
+the same scripts you run locally:
+
+| Job | Runs |
+|---|---|
+| Lint | `scripts/lint.sh` (ruff, `ruby -wc`, `node --check`, `php -l`, `javac -Xlint`, gofmt and `go vet`, shellcheck) and actionlint |
+| Core | `scripts/check_project.sh .` on Elixir 1.14/OTP 25 and 1.18/OTP 27 |
+| `portals_<language>` | `scripts/check_project.sh packages/portals_<language>` and `scripts/sdk_tests.sh <language>`, one job per language. JavaScript installs Node.js, Bun, Deno and QuickJS and runs on all four. |
+| examples/hello_live | `scripts/check_project.sh examples/hello_live` with every runtime |
+| Docs | `scripts/ci/build_docs.sh`: ExDoc for every package, warnings as errors |
+| Hex packages | `scripts/version.exs check` and `scripts/check_hex_packages.sh` |
+
+`scripts/check_project.sh` is formatting, unused locked dependencies,
+`--warnings-as-errors` compilation and `mix test`.
+
 ## Changing an SDK
 
 Every SDK must keep passing `Portals.Conformance.WorkerSuite` and
