@@ -81,7 +81,7 @@ Phase 7 (Ruby and Node.js parity) is implemented:
   surface, dependency-free, with async handlers, `AsyncLocalStorage`-backed
   call context, and a reader loop that never awaits handler execution.
 - `sdk/java/` — the Java worker SDK (`portals.Worker`): the same protocol
-  surface using only the JDK (21+) standard library, with `java.nio`
+  surface using only the JDK (17+) standard library, with `java.nio`
   Unix-domain sockets, separate fixed thread pools for unary calls and
   streams, and reflection-based dispatch onto plain static methods.
 - `test/support/worker_suite.ex` — the shared black-box integration suite
@@ -94,7 +94,7 @@ Phase 7 (Ruby and Node.js parity) is implemented:
 
 Run the Elixir test suite with `mix test` (includes integration tests that
 spawn real Python, Ruby, Node and Java workers; requires `python3`, `ruby`,
-`node`, and `java`/`javac` 21+ on `PATH` — the Java SDK is compiled
+`node`, and `java`/`javac` 17+ on `PATH` — the Java SDK is compiled
 automatically on first use). Each SDK also has its own unit tests:
 
 ```sh

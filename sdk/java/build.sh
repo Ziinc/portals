@@ -1,6 +1,6 @@
 #!/bin/sh
 # Compiles the SDK, its unit tests and its fixtures into build/classes with
-# plain javac (JDK 21+, no build tool or dependencies). A no-op when nothing
+# plain javac (JDK 17+, no build tool or dependencies). A no-op when nothing
 # changed; safe to run concurrently (the Elixir suite starts many workers at
 # once), since only one caller compiles while the rest wait for it.
 #
@@ -38,7 +38,7 @@ rm -rf "$tmp"
 mkdir -p "$tmp"
 touch "$tmp.stamp"
 find "$root/src" "$root/test" -name '*.java' > "$tmp.sources"
-javac --release 21 -encoding UTF-8 -d "$tmp" @"$tmp.sources" 1>&2
+javac --release 17 -encoding UTF-8 -d "$tmp" @"$tmp.sources" 1>&2
 rm -f "$tmp.sources"
 rm -rf "$out"
 mv "$tmp" "$out"
