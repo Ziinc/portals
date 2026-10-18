@@ -2,7 +2,7 @@ defmodule Portals.Request do
   @moduledoc """
   A reference to one in-flight or completed asynchronous call, returned by
   `Portals.async/5` (or `Portals.Connection.async/5`). Pass it to
-  `Portals.await/2` and `Portals.cancel/2`.
+  `Portals.await/2` and `Portals.cancel/1`.
   """
 
   @enforce_keys [:connection, :id]

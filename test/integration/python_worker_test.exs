@@ -3,14 +3,8 @@ defmodule Portals.Integration.PythonWorkerTest do
 
   @moduletag :integration
 
-  @worker_script Path.expand("../../sdk/python/tests/fixtures/run_worker.py", __DIR__)
-
   setup do
-    python =
-      System.find_executable("python3") || System.find_executable("python") ||
-        raise "python3 not available; required for Portals integration tests"
-
-    {:ok, conn} = Portals.start_worker(command: python, args: [@worker_script])
+    {:ok, conn} = Portals.start_worker(Portals.Test.PythonWorker.opts("run_worker.py"))
     on_exit(fn -> Portals.stop_worker(conn, 500) end)
     {:ok, conn: conn}
   end
