@@ -5,17 +5,32 @@ defmodule HelloLive.Languages do
   version. The four JavaScript pools run the same `priv/js/greeter.js`.
   """
 
+  # Every pool the page can call. The four JavaScript pools run the same
+  # worker on different runtimes.
   @languages [
     %{id: "python", name: "Python", pool: HelloLive.Python},
     %{id: "ruby", name: "Ruby", pool: HelloLive.Ruby},
-    %{id: "node", name: "JavaScript · Node.js", pool: HelloLive.JS.Node},
-    %{id: "bun", name: "JavaScript · Bun", pool: HelloLive.JS.Bun},
-    %{id: "deno", name: "JavaScript · Deno", pool: HelloLive.JS.Deno},
-    %{id: "quickjs", name: "JavaScript · QuickJS", pool: HelloLive.JS.QuickJS},
     %{id: "php", name: "PHP", pool: HelloLive.PHP},
+    %{id: "node", name: "Node.js", pool: HelloLive.JS.Node},
+    %{id: "bun", name: "Bun", pool: HelloLive.JS.Bun},
+    %{id: "deno", name: "Deno", pool: HelloLive.JS.Deno},
+    %{id: "quickjs", name: "QuickJS", pool: HelloLive.JS.QuickJS},
     %{id: "java", name: "Java", pool: HelloLive.Java},
     %{id: "go", name: "Go", pool: HelloLive.Go}
   ]
+
+  # How the page groups them: one card per language, and one full-width
+  # JavaScript card showing every runtime.
+  @cards [
+    %{id: "python", name: "Python", targets: ["python"], width: :third},
+    %{id: "ruby", name: "Ruby", targets: ["ruby"], width: :third},
+    %{id: "php", name: "PHP", targets: ["php"], width: :third},
+    %{id: "javascript", name: "JavaScript", targets: ~w(node bun deno quickjs), width: :full},
+    %{id: "java", name: "Java", targets: ["java"], width: :half},
+    %{id: "go", name: "Go", targets: ["go"], width: :half}
+  ]
+
+  def cards, do: @cards
 
   def all, do: @languages
 

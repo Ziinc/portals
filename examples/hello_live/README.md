@@ -38,8 +38,11 @@ every language and runtime replies.
 | Java | `priv/java/src/greeter/*.java` | `Portals.Java.worker_opts(main: "greeter.RunWorker", ...)` |
 | Go | `go/main.go` | `Portals.Go.worker_opts(binary: ...)` |
 
-- `lib/hello_live/languages.ex` starts one pool per language (each with its
-  own child id) and times each `Portals.Pool.call/5`.
+- `lib/hello_live/languages.ex` starts one pool per language and per
+  JavaScript runtime (each with its own child id), and times each
+  `Portals.Pool.call/5`. The page shows one card per language; the
+  JavaScript card spans the full width and shows all four runtimes, which
+  run the same `priv/js/greeter.js`.
 - `lib/hello_live_web/live/hello_live.ex` runs every call with
   `start_async/3`, so a slow runtime never holds up the others.
 - The page loads the Phoenix and LiveView JavaScript clients straight from

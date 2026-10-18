@@ -23,10 +23,20 @@ defmodule HelloLiveWeb.Layouts do
                              border-radius: 8px; width: 260px; background: white; }
           button { font: inherit; cursor: pointer; border: 0; border-radius: 8px; }
           .primary { background: #4f46e5; color: white; font-size: 16px; font-weight: 600; padding: 11px 18px; }
-          .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+          .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px; }
+          .card.third { grid-column: span 2; }
+          .card.half { grid-column: span 3; }
+          .card.full { grid-column: 1 / -1; min-height: 0; }
+          .single { display: flex; flex-direction: column; gap: 10px; }
+          .note { margin: 0; color: #5b6275; font-size: 14px; }
+          .runtimes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+          .runtime { border: 1px solid #e6e8f0; border-top: 4px solid var(--accent); border-radius: 10px;
+                     padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: #fbfbfe; }
+          .runtime h3 { margin: 0; font-size: 16px; }
+          .runtime .reply { font-size: 15px; min-height: 42px; }
           .card { background: white; border-radius: 12px; padding: 18px; border-top: 5px solid var(--accent);
                   box-shadow: 0 1px 3px rgba(20, 24, 40, .08); display: flex; flex-direction: column; gap: 10px;
-                  min-height: 178px; }
+                  min-height: 168px; }
           .card header { display: flex; justify-content: space-between; align-items: center; }
           .card h2 { font-size: 19px; margin: 0; }
           .say { background: color-mix(in srgb, var(--accent) 14%, white); color: #1f2430;

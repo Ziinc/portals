@@ -13,18 +13,23 @@ defmodule HelloLiveWeb.HelloLive do
   @accents %{
     "python" => "#3776ab",
     "ruby" => "#cc342d",
-    "node" => "#5fa04e",
-    "bun" => "#f472b6",
-    "deno" => "#111827",
-    "quickjs" => "#e0b400",
     "php" => "#777bb4",
+    "javascript" => "#e0b400",
     "java" => "#e76f00",
     "go" => "#00add8"
   }
 
+  # Each JavaScript runtime panel's accent, and the option that selects it.
+  @runtimes %{
+    "node" => {"#5fa04e", ":node"},
+    "bun" => {"#f472b6", ":bun"},
+    "deno" => {"#111827", ":deno"},
+    "quickjs" => {"#e0b400", ":quickjs"}
+  }
+
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, name: "world", languages: Languages.all(), replies: %{})}
+    {:ok, assign(socket, name: "world", cards: Languages.cards(), replies: %{})}
   end
 
   @impl true
@@ -37,8 +42,9 @@ defmodule HelloLiveWeb.HelloLive do
     {:noreply, Enum.reduce(Languages.all(), socket, &say_hello(&2, &1.id))}
   end
 
-  def handle_event("hello", %{"language" => id}, socket) do
-    {:noreply, say_hello(socket, id)}
+  def handle_event("hello", %{"card" => card_id}, socket) do
+    card = Enum.find(Languages.cards(), &(&1.id == card_id))
+    {:noreply, Enum.reduce(card.targets, socket, &say_hello(&2, &1))}
   end
 
   defp say_hello(socket, id) do
@@ -60,7 +66,7 @@ defmodule HelloLiveWeb.HelloLive do
 
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, :accents, @accents)
+    assigns = assign(assigns, accents: @accents, runtimes: @runtimes)
 
     ~H"""
     <main>
@@ -79,19 +85,43 @@ defmodule HelloLiveWeb.HelloLive do
 
       <div class="grid">
         <section
-          :for={language <- @languages}
-          id={"lang-" <> language.id}
-          class="card"
-          style={"--accent: #{@accents[language.id]}"}
+          :for={card <- @cards}
+          id={"lang-" <> card.id}
+          class={"card #{card.width}"}
+          style={"--accent: #{@accents[card.id]}"}
         >
           <header>
-            <h2>{language.name}</h2>
-            <button class="say" phx-click="hello" phx-value-language={language.id}>
-              Say hello
+            <h2>{card.name}</h2>
+            <button class="say" phx-click="hello" phx-value-card={card.id}>
+              {if length(card.targets) > 1, do: "Say hello on all runtimes", else: "Say hello"}
             </button>
           </header>
-          <code>Portals.Pool.call({inspect(language.pool)}, "greeter", "hello", [name])</code>
-          <.reply reply={@replies[language.id]} />
+
+          <%= if card.id == "javascript" do %>
+            <p class="note">
+              The same <code>greeter.js</code>
+              on four runtimes, picked with <code>Portals.JavaScript.worker_opts(runtime: ...)</code>.
+            </p>
+            <div class="runtimes">
+              <div
+                :for={id <- card.targets}
+                id={"target-" <> id}
+                class="runtime"
+                style={"--accent: #{elem(@runtimes[id], 0)}"}
+              >
+                <h3>{HelloLive.Languages.fetch!(id).name}</h3>
+                <code>runtime: {elem(@runtimes[id], 1)}</code>
+                <.reply reply={@replies[id]} />
+              </div>
+            </div>
+          <% else %>
+            <div id={"target-" <> hd(card.targets)} class="single">
+              <code>
+                Portals.Pool.call({inspect(HelloLive.Languages.fetch!(hd(card.targets)).pool)}, "greeter", "hello", [name])
+              </code>
+              <.reply reply={@replies[hd(card.targets)]} />
+            </div>
+          <% end %>
         </section>
       </div>
     </main>

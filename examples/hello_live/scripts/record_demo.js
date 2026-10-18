@@ -18,7 +18,7 @@ const path = require('node:path');
 
 const url = process.env.DEMO_URL || 'http://localhost:4000/';
 const out = path.resolve(__dirname, '../demo/hello_live.gif');
-const viewport = { width: 1180, height: 940 };
+const viewport = { width: 1180, height: 900 };
 const scale = 2; // capture at 2x device pixels
 const outWidth = 1600; // final GIF width: sharp on HiDPI screens
 const fps = 25;
@@ -97,9 +97,9 @@ const cursorScript = `
   await page.keyboard.press('Control+A');
   await page.keyboard.type('LiveView', { delay: 110 });
   await page.waitForTimeout(300);
-  for (const id of ['go', 'python']) {
-    await clickOn(page.locator(`#lang-${id} button`));
-    await page.waitForTimeout(1100);
+  for (const id of ['javascript', 'go']) {
+    await clickOn(page.locator(`#lang-${id} header button`));
+    await page.waitForTimeout(1300);
   }
   await page.waitForTimeout(1800);
   const end = Date.now() / 1000;

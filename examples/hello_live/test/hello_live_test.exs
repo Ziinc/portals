@@ -27,7 +27,7 @@ defmodule HelloLiveWeb.HelloLiveTest do
     for {id, runtime} <- @runtimes do
       html = render_async(view, 10_000)
 
-      assert view |> element("#lang-#{id} .reply") |> render() =~
+      assert view |> element("#target-#{id} .reply") |> render() =~
                "Hello, Portals! I&#39;m #{runtime}",
              "no reply from #{runtime} in:\n#{html}"
     end
@@ -39,7 +39,22 @@ defmodule HelloLiveWeb.HelloLiveTest do
     view |> element("#lang-go button", "Say hello") |> render_click()
     render_async(view, 10_000)
 
-    assert view |> element("#lang-go .reply") |> render() =~ "Hello, world! I&#39;m Go"
-    assert view |> element("#lang-python .reply") |> render() =~ "Not called yet"
+    assert view |> element("#target-go .reply") |> render() =~ "Hello, world! I&#39;m Go"
+    assert view |> element("#target-python .reply") |> render() =~ "Not called yet"
+  end
+
+  test "the JavaScript card greets every runtime at once" do
+    {:ok, view, _html} = live(build_conn(), "/")
+
+    view |> element("#lang-javascript header button") |> render_click()
+
+    for {id, runtime} <- [node: "Node.js", bun: "Bun", deno: "Deno", quickjs: "QuickJS"] do
+      render_async(view, 10_000)
+
+      assert view |> element("#target-#{id} .reply") |> render() =~
+               "Hello, world! I&#39;m JavaScript on #{runtime}"
+    end
+
+    assert view |> element("#target-go .reply") |> render() =~ "Not called yet"
   end
 end
