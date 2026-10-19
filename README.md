@@ -106,6 +106,13 @@ Linux is the supported platform. See
 [docs/prd.md](https://github.com/Ziinc/portals/blob/main/docs/prd.md) for the
 roadmap.
 
+[bench/](https://github.com/Ziinc/portals/blob/main/bench/README.md) compares
+Portals with ErlPort and zerorpc, and its codecs and transports with the
+alternatives, with results. In short: ErlPort is about twice as fast on
+small calls (the Python worker's thread pool costs ~80 µs per call), and
+Portals' MessagePack codecs are its slowest part on large and structured
+payloads.
+
 ## Repository layout
 
 ```text

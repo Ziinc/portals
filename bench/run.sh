@@ -25,6 +25,9 @@ mkdir -p results
 } > results/environment.txt
 cat results/environment.txt
 
+# Compile first, so build output stays out of the results.
+MIX_ENV=prod mix compile >/dev/null
+
 for part in $parts; do
   printf '\n==> %s\n' "$part"
   case $part in

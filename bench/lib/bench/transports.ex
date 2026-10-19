@@ -102,15 +102,17 @@ defmodule Bench.Transports do
           )
 
         {:ok, socket} = :chumak.socket(:dealer)
-        {:ok, _peer} = :chumak.connect(socket, :tcp, ~c"127.0.0.1", tcp_port)
-        {echo, socket}
+        {:ok, peer} = :chumak.connect(socket, :tcp, ~c"127.0.0.1", tcp_port)
+        {echo, socket, peer}
       end,
-      round_trip: fn {_echo, socket}, frame ->
+      round_trip: fn {_echo, socket, _peer}, frame ->
         :ok = :chumak.send_multipart(socket, [frame])
         {:ok, [reply]} = :chumak.recv_multipart(socket)
         reply
       end,
-      stop: fn {echo, socket} ->
+      stop: fn {echo, socket, peer} ->
+        # The peer (connection) outlives its socket and would keep reconnecting.
+        :chumak_peer.close(peer)
         GenServer.stop(socket)
         Python.kill(echo)
       end,

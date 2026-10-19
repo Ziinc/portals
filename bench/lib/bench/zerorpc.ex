@@ -22,10 +22,10 @@ defmodule Bench.ZeroRPC do
   @impl true
   def init(port) do
     {:ok, socket} = :chumak.socket(:dealer)
-    {:ok, _peer} = :chumak.connect(socket, :tcp, ~c"127.0.0.1", port)
+    {:ok, peer} = :chumak.connect(socket, :tcp, ~c"127.0.0.1", port)
     owner = self()
     receiver = spawn_link(fn -> receive_loop(socket, owner) end)
-    {:ok, %{socket: socket, receiver: receiver, next_id: 0, pending: %{}}}
+    {:ok, %{socket: socket, peer: peer, receiver: receiver, next_id: 0, pending: %{}}}
   end
 
   @impl true
@@ -55,6 +55,8 @@ defmodule Bench.ZeroRPC do
   def terminate(_reason, state) do
     Process.unlink(state.receiver)
     Process.exit(state.receiver, :kill)
+    # The peer (connection) outlives its socket and would keep reconnecting.
+    :chumak_peer.close(state.peer)
     GenServer.stop(state.socket)
   end
 
