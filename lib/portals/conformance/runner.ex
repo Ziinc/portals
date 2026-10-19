@@ -47,8 +47,7 @@ defmodule Portals.Conformance.Runner do
     fixtures = malformed_fixtures(codec_name(codec))
     golden_failures = Enum.flat_map(golden_vectors(), &check_golden_vector(&1, codec, limits))
 
-    malformed_failures =
-      Enum.flat_map(fixtures, &check_malformed_fixture(&1, codec, limits))
+    malformed_failures = Enum.flat_map(fixtures, &check_malformed_fixture(&1, codec, limits))
 
     failures = golden_failures ++ malformed_failures
     total = length(golden_vectors()) + length(fixtures)
