@@ -1,0 +1,223 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Every JavaScript runtime is installed below, so a missing one is an error.
+  PORTALS_REQUIRE_ALL_RUNTIMES: "1"
+  ELIXIR_VERSION: "1.18.4"
+  OTP_VERSION: "27.3"
+
+jobs:
+  lint:
+    name: Lint (all languages)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install ruff==0.16.8
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+          tools: none
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+      # shellcheck is preinstalled on GitHub's Ubuntu runners.
+      - run: scripts/lint.sh
+      - name: Lint workflows (actionlint)
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+
+  core:
+    name: Core (Elixir ${{ matrix.elixir }}, OTP ${{ matrix.otp }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest versions mix.exs allows, and the newest verified.
+          - elixir: "1.14.5"
+            otp: "25.3"
+          - elixir: "1.18.4"
+            otp: "27.3"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
+      # Core's integration tests launch the Python SDK's fixture worker.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: core-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('mix.lock') }}
+      - run: scripts/check_project.sh .
+
+  package:
+    name: portals_${{ matrix.language }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, ruby, javascript, php, java, go]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - if: matrix.language == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - if: matrix.language == 'ruby'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+      - if: matrix.language == 'javascript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - if: matrix.language == 'javascript'
+        uses: oven-sh/setup-bun@v2
+      - if: matrix.language == 'javascript'
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - if: matrix.language == 'javascript'
+        name: Install QuickJS-ng
+        run: scripts/ci/install_quickjs.sh
+      - if: matrix.language == 'php'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+          tools: none
+      - if: matrix.language == 'java'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # The SDK targets Java 17, so test on it.
+          java-version: "17"
+      - if: matrix.language == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            packages/portals_${{ matrix.language }}/deps
+            packages/portals_${{ matrix.language }}/_build
+          key: package-${{ matrix.language }}-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles(format('packages/portals_{0}/mix.lock', matrix.language)) }}
+      - name: Elixir checks and tests
+        run: scripts/check_project.sh packages/portals_${{ matrix.language }}
+      - name: SDK unit tests
+        run: scripts/sdk_tests.sh ${{ matrix.language }}
+
+  example:
+    name: examples/hello_live
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: oven-sh/setup-bun@v2
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Install QuickJS-ng
+        run: scripts/ci/install_quickjs.sh
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+          tools: none
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+      - uses: actions/cache@v4
+        with:
+          path: |
+            examples/hello_live/deps
+            examples/hello_live/_build
+          key: example-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('examples/hello_live/mix.lock') }}
+      - run: scripts/check_project.sh examples/hello_live
+
+  docs:
+    name: Docs (ExDoc, warnings as errors)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+      - run: scripts/ci/build_docs.sh
+
+  hex:
+    name: Hex packages (dry-run build)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+      # portals_java ships a prebuilt jar, built with javac.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: elixir scripts/version.exs check
+      - run: scripts/check_hex_packages.sh

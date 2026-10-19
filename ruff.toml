@@ -1,0 +1,6 @@
+# Lint rules for the Python SDK and examples (scripts/lint.sh). Pinned
+# explicitly: Ruff's default rule set changes between releases.
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "B"]
