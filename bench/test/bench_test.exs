@@ -10,6 +10,7 @@ defmodule BenchTest do
 
   for {name, target} <- [
         {"Portals pool", quote(do: Targets.portals(size: 2))},
+        {"Portals pool, inline", quote(do: Targets.portals(size: 2, inline: true))},
         {"ErlPort, 2 instances", quote(do: Targets.erlport(instances: 2))}
         | Enum.map(Targets.rpc(), fn {name, _} -> {name, nil} end)
       ] do

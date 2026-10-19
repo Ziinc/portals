@@ -284,9 +284,11 @@ Differences from the other runtimes:
   `node_modules` packages, but packages that need Node APIs beyond the
   ones listed (`http`, `crypto`, `child_process`, ...) fail to load.
 - **Call context is emulated.** QuickJS has no async context tracking, so
-  `portals.currentDeadlineMs()`, `portals.isCancelled()` and the callback
-  depth follow the calls in flight like a stack. They are exact when calls
-  don't overlap, or when they nest through callbacks (the common case).
+  `portals.currentDeadlineMs()`, `portals.isCancelled()`, the callback
+  depth and whether the current call is inline follow the calls in flight
+  like a stack. They are exact when calls don't overlap, or when they nest
+  through callbacks (the common case). An ordinary call that resumes while
+  an inline call runs may see the inline call's context.
   For long, concurrent, `await`-heavy handlers that rely on these helpers,
   set `maxConcurrency: 1` in the worker.
 - **An interpreter, not a JIT.** CPU-heavy JavaScript is much slower than

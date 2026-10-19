@@ -96,7 +96,7 @@ defmodule Portals.Protocol do
   @spec arity(frame_name) :: {non_neg_integer, non_neg_integer | :infinity}
   def arity(:hello), do: {5, 5}
   def arity(:ready), do: {2, 2}
-  def arity(:call), do: {4, 6}
+  def arity(:call), do: {4, 7}
   def arity(:return), do: {2, 2}
   def arity(:error), do: {2, 2}
   def arity(:cancel), do: {1, 1}

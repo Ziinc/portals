@@ -17,7 +17,9 @@ require_relative 'streams'
 # The socket reader is a dedicated thread independent of call execution
 # (each `CALL` is handed to a bounded thread pool), so a slow or blocked
 # handler can never stall reading further frames or responding to other
-# in-flight calls.
+# in-flight calls. The exception is an inline `CALL` (protocol/v1.md §7.1),
+# which runs to completion on the reader thread before any further frame is
+# read.
 #
 # Fully reentrant callbacks (protocol/v1.md §8): a handler running inside a
 # `CALL` may call back into the BEAM with `Portals.callback(...)`, which
@@ -310,12 +312,17 @@ module Portals
 
     # Route a CALL to the unary pool, or — when its target was declared with
     # `stream_handler` — to the separate stream pool with a `Stream` bound to
-    # the call's request_id.
+    # the call's request_id. An inline unary CALL (7th field `true`,
+    # protocol/v1.md §7.1) runs right here on the reader thread instead.
     def submit_call(fields)
       request_id, module_name, function_name = fields[0], fields[1], fields[2]
 
       unless stream_target?(module_name, function_name)
-        @pool.submit { dispatch_call(fields) }
+        if fields[6] == true
+          dispatch_inline_call(fields)
+        else
+          @pool.submit { dispatch_call(fields) }
+        end
         return
       end
 
@@ -368,6 +375,15 @@ module Portals
       stream.half_close
       release_stream(request_id)
       send_envelope([Protocol::RETURN, request_id, result]) unless stream.cancelled?
+    end
+
+    # No frame is read until this returns, so a callback's reply could never
+    # arrive: `Portals.callback` checks the flag and fails at once.
+    def dispatch_inline_call(fields)
+      Thread.current[:portals_inline] = true
+      dispatch_call(fields)
+    ensure
+      Thread.current[:portals_inline] = nil
     end
 
     def dispatch_call(fields)
@@ -495,6 +511,7 @@ module Portals
   def callback(mod, function, args = [], timeout: nil)
     worker = Worker.active
     raise 'Portals.callback called with no active Worker in this process' if worker.nil?
+    raise 'Portals.callback is unavailable in an inline call' if Thread.current[:portals_inline]
 
     worker.call_callback(mod, function, args, timeout: timeout)
   end

@@ -63,6 +63,9 @@ def callback(module: str, function: str, args: Optional[list] = None, timeout: O
     worker = _active_worker
     if worker is None:
         raise RuntimeError("portals.callback() called with no active Worker in this process")
+    if getattr(_thread_local, "inline", False):
+        # The reply could never be read: nothing reads frames until this call returns.
+        raise RuntimeError("portals.callback() is unavailable in an inline call")
     return worker.call_callback(module, function, args or [], timeout=timeout)
 
 
@@ -300,12 +303,21 @@ class Worker:
         `Stream` bound to the call's request_id."""
 
         request_id, module_name, function_name = fields[0], fields[1], fields[2]
+        inline = len(fields) > 6 and fields[6] is True
         function = self._resolve_quietly(module_name, function_name)
 
         if function is None or not is_stream_handler(function):
             with self._call_cancel_lock:
                 self._call_cancel_flags[request_id] = threading.Event()
-            self._executor.submit(self._dispatch_call, fields)
+            if inline:
+                # Run on this (the reader) thread: no frame is read until it returns.
+                _thread_local.inline = True
+                try:
+                    self._dispatch_call(fields)
+                finally:
+                    _thread_local.inline = False
+            else:
+                self._executor.submit(self._dispatch_call, fields)
             return
 
         if self._stream_executor is None:
@@ -414,12 +426,11 @@ class Worker:
         depth = 0
         deadline_ms = None
 
-        if len(fields) == 4:
-            request_id, module_name, function_name, args = fields
-        elif len(fields) == 5:
-            request_id, module_name, function_name, args, deadline_ms = fields
-        else:
-            request_id, module_name, function_name, args, deadline_ms, depth = fields
+        request_id, module_name, function_name, args = fields[:4]
+        if len(fields) > 4:
+            deadline_ms = fields[4]
+        if len(fields) > 5:
+            depth = fields[5]
 
         _thread_local.depth = depth or 0
         _thread_local.deadline_ms = deadline_ms

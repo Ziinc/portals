@@ -26,6 +26,8 @@ public final class Portals {
    * this handler's thread (never the socket reader) for its result.
    *
    * @throws RemoteException when the BEAM-side handler fails
+   * @throws PortalsException at once inside an inline call (protocol/v1.md
+   *     §7.1), whose reply could never be read
    */
   public static Object callback(String module, String function, List<?> args) throws InterruptedException {
     return callback(module, function, args, -1);

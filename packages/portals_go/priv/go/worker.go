@@ -23,7 +23,9 @@ import (
 // The socket reader is a dedicated goroutine independent of call execution
 // (each CALL runs on its own goroutine, bounded by MaxConcurrency), so a
 // slow or blocked handler can never stall reading further frames or
-// responding to other in-flight calls.
+// responding to other in-flight calls. The one exception is an inline
+// CALL (protocol/v1.md section 7.1), which runs on the reader goroutine
+// itself and cannot call back.
 //
 // Fully reentrant callbacks (protocol/v1.md section 8): a handler may call
 // back into the BEAM with Call.Callback, which blocks only the handler's
@@ -331,7 +333,9 @@ func (w *Worker) handleFrame(payload []byte) bool {
 
 // submitCall routes a CALL to a unary handler, or — when its target was
 // registered with HandleStream — opens a stream bound to the call's
-// request_id.
+// request_id. A CALL whose optional inline field is true runs right here on
+// the reader goroutine (protocol/v1.md section 7.1); a stream is never
+// inline.
 func (w *Worker) submitCall(fields []any) {
 	get := func(i int) any {
 		if i < len(fields) {
@@ -358,28 +362,43 @@ func (w *Worker) submitCall(fields []any) {
 	w.unary[call.requestID] = cancel
 	w.mu.Unlock()
 
-	go func() {
+	if inline, _ := get(6).(bool); inline {
+		call.inline = true
+		w.runUnary(call, key, args, cancel)
+		return
+	}
+	go w.runUnary(call, key, args, cancel)
+}
+
+// runUnary runs a unary handler to completion and sends its RETURN or
+// ERROR. An inline call takes no concurrency slot: waiting for one on the
+// reader goroutine could stall the very calls holding them, whose
+// callbacks' replies only the reader can deliver.
+func (w *Worker) runUnary(call *Call, key handlerKey, args []any, cancel context.CancelFunc) {
+	if !call.inline {
 		w.slots <- struct{}{}
-		value, errMap := w.invoke(func() (any, error) {
-			h, ok := w.handlers[key]
-			if !ok {
-				return nil, &UndefinedError{call.module, call.function}
-			}
-			return h(call, Args(args))
-		})
-		<-w.slots
-
-		w.mu.Lock()
-		delete(w.unary, call.requestID)
-		w.mu.Unlock()
-		cancel()
-
-		if errMap != nil {
-			w.sendEnvelope([]any{TagError, call.requestID, errMap})
-		} else {
-			w.sendTerminal(call.requestID, value)
+	}
+	value, errMap := w.invoke(func() (any, error) {
+		h, ok := w.handlers[key]
+		if !ok {
+			return nil, &UndefinedError{call.module, call.function}
 		}
-	}()
+		return h(call, Args(args))
+	})
+	if !call.inline {
+		<-w.slots
+	}
+
+	w.mu.Lock()
+	delete(w.unary, call.requestID)
+	w.mu.Unlock()
+	cancel()
+
+	if errMap != nil {
+		w.sendEnvelope([]any{TagError, call.requestID, errMap})
+	} else {
+		w.sendTerminal(call.requestID, value)
+	}
 }
 
 func (w *Worker) openStream(call *Call, h StreamHandler, args []any) {

@@ -10,6 +10,7 @@ in_flight = 64
 started =
   Bench.Config.start_all([
     {"Portals: 1 worker", Targets.portals(transport: :unix)},
+    {"Portals: 1 worker, inline", Targets.portals(transport: :unix, inline: true)},
     {"Portals: pool of 4", Targets.portals(transport: :unix, size: 4)},
     {"zerorpc: 1 server", Targets.zerorpc()},
     {"ErlPort: 1 interpreter", Targets.erlport()},

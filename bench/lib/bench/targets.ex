@@ -14,7 +14,9 @@ defmodule Bench.Targets do
   def rpc do
     [
       {"Portals: ETF, Unix socket", portals(transport: :unix)},
+      {"Portals: ETF, Unix socket, inline", portals(transport: :unix, inline: true)},
       {"Portals: ETF, stdio", portals(transport: :stdio)},
+      {"Portals: ETF, stdio, inline", portals(transport: :stdio, inline: true)},
       {"Portals: MessagePack, Unix socket", portals(transport: :unix, codec: :msgpack)},
       {"Portals: MessagePack, stdio", portals(transport: :stdio, codec: :msgpack)},
       {"zerorpc: MessagePack, ZeroMQ/TCP", zerorpc()},
@@ -22,10 +24,11 @@ defmodule Bench.Targets do
     ]
   end
 
-  @doc "Portals, optionally as a pool of `:size` workers."
+  @doc "Portals, optionally as a pool of `:size` workers and with `inline: true` calls."
   def portals(opts) do
     transport = Keyword.get(opts, :transport, :unix)
     size = opts[:size]
+    call_opts = [timeout: 60_000, inline: Keyword.get(opts, :inline, false)]
 
     codec = Keyword.get(opts, :codec, :etf)
 
@@ -54,7 +57,7 @@ defmodule Bench.Targets do
         pid
       end,
       call: fn pid, function, args ->
-        {:ok, result} = call.(pid, "bench_handlers", function, args, timeout: 60_000)
+        {:ok, result} = call.(pid, "bench_handlers", function, args, call_opts)
         result
       end,
       stop: fn pid -> GenServer.stop(pid) end,

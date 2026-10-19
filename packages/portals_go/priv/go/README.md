@@ -113,6 +113,13 @@ handlers execute at once (the rest wait their turn), and up to
 streams never starve unary calls. Opening a stream beyond `MaxStreams` is
 an `overload` error.
 
+A `CALL` the BEAM sends with `inline: true` (protocol/v1.md section 7.1)
+instead runs on the frame-reading goroutine, outside `MaxConcurrency`, and
+its result is sent before any later frame is read. Handlers need no
+changes, but `Callback` fails at once with `portals.ErrInlineCallback`
+inside an inline call, since its reply could never be read. A `CALL` that
+opens a stream is never inline.
+
 ## Values
 
 | Erlang | Go (decoded) | Go (accepted on encode) |

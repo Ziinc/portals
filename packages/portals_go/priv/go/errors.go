@@ -30,6 +30,10 @@ var (
 	ErrTimeout = errors.New("portals: timed out")
 	// ErrNoWorker is returned when a call context outlives its worker.
 	ErrNoWorker = errors.New("portals: worker is not running")
+	// ErrInlineCallback is returned by Call.Callback inside an inline call
+	// (protocol/v1.md section 7.1): no frame is read until the call
+	// returns, so the callback's reply could never arrive.
+	ErrInlineCallback = errors.New("portals: callback is unavailable in an inline call")
 )
 
 // Error is a structured error. Handlers may return one to control the

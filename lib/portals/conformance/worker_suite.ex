@@ -234,6 +234,53 @@ defmodule Portals.Conformance.WorkerSuite do
         end
       end
 
+      describe "inline calls (protocol/v1.md section 7.1)" do
+        setup do
+          {:ok, conn: start_worker()}
+        end
+
+        test "return results like any other call", %{conn: conn} do
+          assert {:ok, 3} = Portals.call(conn, "bench_worker", "add", [1, 2], inline: true)
+
+          value = %{"list" => [1, 2.5, nil], "tuple" => {:ok, "x"}}
+
+          assert {:ok, ^value} =
+                   Portals.call(conn, "bench_worker", "echo_term", [value], inline: true)
+        end
+
+        test "run before the worker reads any later frame", %{conn: conn} do
+          {:ok, inline} = Portals.async(conn, "bench_worker", "sleep_ms", [400], inline: true)
+          started = System.monotonic_time(:millisecond)
+          {:ok, later} = Portals.async(conn, "bench_worker", "add", [1, 2])
+
+          assert {:ok, 3} = Portals.await(later, 5_000)
+          assert System.monotonic_time(:millisecond) - started >= 300
+          assert {:ok, 400} = Portals.await(inline, 5_000)
+        end
+
+        test "leave calls that are already running alone", %{conn: conn} do
+          {:ok, slow} = Portals.async(conn, "bench_worker", "sleep_ms", [1_500])
+          started = System.monotonic_time(:millisecond)
+
+          assert {:ok, 3} =
+                   Portals.call(conn, "bench_worker", "add", [1, 2], inline: true, timeout: 2_000)
+
+          assert System.monotonic_time(:millisecond) - started < 1_000
+          assert {:ok, 1_500} = Portals.await(slow, 5_000)
+        end
+
+        test "cannot call back into the BEAM, and fail at once instead of hanging", %{conn: conn} do
+          assert {:error, %Portals.Error{kind: :remote} = error} =
+                   Portals.call(conn, "bench_worker", "double_via_callback", [21],
+                     inline: true,
+                     timeout: 2_000
+                   )
+
+          assert error.message =~ ~r/inline/i
+          assert {:ok, 84} = Portals.call(conn, "bench_worker", "double_via_callback", [42])
+        end
+      end
+
       describe "callbacks and PID messaging" do
         setup do
           {:ok, conn: start_worker()}

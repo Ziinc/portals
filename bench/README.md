@@ -83,6 +83,14 @@ the rest are from the first run.
 | ErlPort: 1 interpreter | **27 ms** | **~36,600** |
 | ErlPort: 4 interpreters | 33 ms | ~29,900 |
 
+### Inline calls (`inline: true`, protocol/v1.md section 7.1)
+
+| | `add(1, 2)` | 64 KiB bytes | 1,000 integers | 100 records | 1,000 × `add`, 64 in flight |
+|---|---|---|---|---|---|
+| Portals: ETF, Unix socket | 179 µs | 346 µs | 1.88 ms | 4.13 ms | 207 ms |
+| Portals: ETF, Unix socket, **inline** | **103 µs** | **211 µs** | 1.67 ms | 3.83 ms | **41 ms** |
+| ErlPort | 75 µs | 341 µs | 1.69 ms | 3.51 ms | 30 ms |
+
 ### Startup: start, one call, stop
 
 | | |
@@ -137,13 +145,15 @@ limits before encoding, which is what costs the extra on large lists.
   103 µs per `add` against ErlPort's 99 µs, and 33.6 ms per 1,000-call
   batch against ErlPort's 34.8 ms; with the thread pool it was 181 µs
   and 207 ms. The pool is what lets handlers block, run concurrently, be
-  cancelled and call back into Elixir (an inline callback would deadlock,
-  since the reader thread receives its reply), so it is not free to drop.
+  cancelled and call back into Elixir, so it stays the default; a call
+  made with `inline: true` skips it (see *Inline calls* above): `add`
+  drops from 179 to 103 µs and a 1,000-call batch from 207 to 41 ms.
 - **Concurrency doesn't help one Portals worker.** 64 calls in flight run
   no faster than one at a time (about 5,000 calls/s either way): the
   reader thread and the pool threads contend for the GIL. A pool of 4
-  workers roughly doubles it. ErlPort pipelines calls through one
-  interpreter at over 30,000 calls/s.
+  workers roughly doubles it; inline calls on one worker reach about
+  24,000 calls/s. ErlPort pipelines calls through one interpreter at over
+  30,000 calls/s.
 - **ETF is the default codec because it is faster.** Against Portals'
   MessagePack it cuts a 1 MiB round trip from 10.1 ms to 4.0 ms (ErlPort:
   8.6 ms), 1,000 integers from 2.6 to 1.8 ms and 64 KiB from 485 to
