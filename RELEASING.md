@@ -23,8 +23,8 @@ on `portals ~> X.Y.Z`, which accepts newer patch releases of core.
 
 ## Steps
 
-1. `elixir scripts/version.exs bump X.Y.Z`, update the changelog, and
-   merge that to `main` through a pull request. Its CI already runs the
+1. `elixir scripts/version.exs bump X.Y.Z` and merge that to `main`
+   through a pull request. Its CI already runs the
    release dry run below.
 2. On an up-to-date `main`, `scripts/release.sh`: it checks the tree is
    clean, every version location agrees and the tag doesn't exist yet,
@@ -45,6 +45,9 @@ The tag starts `.github/workflows/release.yml`:
    docs to hexdocs.
 
 Nothing is published unless every earlier job passed.
+
+Once it has published, create the GitHub release for the tag by hand. Its
+notes are the changelog; there is no changelog file.
 
 ## The dry run
 
