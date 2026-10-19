@@ -29,7 +29,7 @@ defmodule Portals.MixProject do
     [
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      files: ["lib", "protocol", "mix.exs", "README.md", "CHANGELOG.md", "LICENSE"]
+      files: ["lib", "protocol", "mix.exs", "README.md", "LICENSE"]
     ]
   end
 
@@ -48,13 +48,12 @@ defmodule Portals.MixProject do
         "guides/languages/php.md": [filename: "php", title: "PHP"],
         "guides/languages/java.md": [filename: "java", title: "Java"],
         "guides/languages/go.md": [filename: "go", title: "Go"],
-        "protocol/v1.md": [filename: "protocol-v1", title: "Wire protocol v1"],
-        "CHANGELOG.md": [title: "Changelog"]
+        "protocol/v1.md": [filename: "protocol-v1", title: "Wire protocol v1"]
       ],
       groups_for_extras: [
         Guides: ["README.md", "guides/getting-started.md"],
         Languages: Path.wildcard("guides/languages/*.md"),
-        Reference: ["protocol/v1.md", "CHANGELOG.md"]
+        Reference: ["protocol/v1.md"]
       ],
       groups_for_modules: [
         "Calling workers": [Portals, Portals.Pool, Portals.Request, Portals.Stream],

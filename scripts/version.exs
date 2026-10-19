@@ -1,6 +1,6 @@
 # Every place a release version lives. All of them move together: core
 # `portals`, each `portals_<language>` package and the SDK it bundles are
-# released in lockstep (see RELEASING.md).
+# released in lockstep.
 #
 #     elixir scripts/version.exs check        # exit 1 if any location drifts
 #     elixir scripts/version.exs bump 0.2.0   # rewrite every location

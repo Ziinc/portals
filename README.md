@@ -117,13 +117,11 @@ packages/portals_<language>/
   priv/<language>/     the bundled worker SDK, with its own unit tests
   test/                the shared conformance suites run against that SDK
 examples/hello_live/   a Phoenix LiveView app calling every language and JS runtime
-scripts/               test_all.sh, version.exs, release.sh
+scripts/               test_all.sh, version.exs, release.sh, hex_dry_run.sh, publish_hex.sh
 ```
 
 See [CONTRIBUTING.md](https://github.com/Ziinc/portals/blob/main/CONTRIBUTING.md)
-for development and
-[RELEASING.md](https://github.com/Ziinc/portals/blob/main/RELEASING.md) for
-releases.
+for development and releases.
 
 ## License
 
