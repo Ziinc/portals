@@ -12,3 +12,6 @@ erl_crash.dump
 # Python SDK
 __pycache__/
 *.pyc
+
+# Hex tarballs from a local `mix hex.build`
+/portals*.tar
