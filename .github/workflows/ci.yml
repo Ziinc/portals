@@ -196,6 +196,29 @@ jobs:
           key: example-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('examples/hello_live/mix.lock') }}
       - run: scripts/check_project.sh examples/hello_live
 
+  bench:
+    name: bench (smoke tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            bench/deps
+            bench/_build
+          key: bench-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('bench/mix.lock') }}
+      - run: bench/setup.sh
+      # Every target and transport returns what it was sent; the benchmarks
+      # themselves run on demand in bench.yml.
+      - run: scripts/check_project.sh bench
+
   release-dry-run:
     name: Release dry run (docs and every Hex package)
     runs-on: ubuntu-24.04

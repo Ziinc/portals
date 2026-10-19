@@ -117,6 +117,7 @@ packages/portals_<language>/
   priv/<language>/     the bundled worker SDK, with its own unit tests
   test/                the shared conformance suites run against that SDK
 examples/hello_live/   a Phoenix LiveView app calling every language and JS runtime
+bench/                 benchmarks against ETF, zerorpc, ErlPort and other codecs/transports
 scripts/               test_all.sh, version.exs, release.sh, hex_dry_run.sh, publish_hex.sh
 ```
 

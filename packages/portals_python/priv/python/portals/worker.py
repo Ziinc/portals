@@ -21,6 +21,7 @@ from the pool.
 import importlib
 import itertools
 import logging
+import os
 import platform
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -28,7 +29,12 @@ from typing import Optional
 
 from . import protocol as p
 from .errors import build_error_map, overload_error_map
-from .msgpack_codec import DecodeError, decode, encode
+
+if os.environ.get("PORTALS_CODEC") == "etf":
+    # Benchmark-only (see Portals.Codec.ETFBench); MessagePack is the codec.
+    from .etf_codec import DecodeError, decode, encode
+else:
+    from .msgpack_codec import DecodeError, decode, encode
 from .streams import FRAME_PREFIX_BYTES as STREAM_FRAME_PREFIX_BYTES
 from .streams import Stream, StreamProtocolError, is_stream_handler
 from .transport import ConnectionClosed, FramedSocket, FramedStdio, socket_path_from_argv

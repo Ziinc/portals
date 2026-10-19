@@ -24,8 +24,6 @@ defmodule Portals.Connection do
   alias Portals.{Codec, Error, Handshake, Protocol, Request, SocketDir, Stream}
   alias Portals.WorkerLifecycle
 
-  @codec Codec.MessagePack
-
   # Transport framing overhead charged against stream credit along with
   # the encoded envelope itself (protocol/v1.md section 9).
   @frame_prefix_bytes 4
@@ -40,6 +38,7 @@ defmodule Portals.Connection do
     :worker_info,
     :callback_sup,
     :callback_allowlist,
+    codec: Codec.MessagePack,
     message_envelope: :wrapped,
     next_request_id: 1,
     pending: %{},
@@ -168,6 +167,8 @@ defmodule Portals.Connection do
       status: :starting,
       callback_sup: callback_sup,
       callback_allowlist: Keyword.get(opts, :callback_allowlist),
+      # Internal: Portals.Codec.ETFBench is selectable for benchmarks only.
+      codec: Keyword.get(opts, :codec, Codec.MessagePack),
       message_envelope: Keyword.get(opts, :message_envelope, :wrapped)
     }
 
@@ -243,7 +244,7 @@ defmodule Portals.Connection do
       {:ok, stream} ->
         frame = [Protocol.frame_tag(:stream_data), id, chunk]
 
-        case @codec.encode(frame, state.limits) do
+        case state.codec.encode(frame, state.limits) do
           {:ok, bytes} ->
             attempt_send_chunk(state, stream, from, bytes)
 
@@ -469,7 +470,7 @@ defmodule Portals.Connection do
            ),
          {:ok, socket} <- Portals.Transport.Unix.accept(listen_socket, connect_timeout),
          :ok <- :gen_tcp.close(listen_socket),
-         {:ok, worker_info} <- handshake(socket, :unix, state.limits, handshake_timeout) do
+         {:ok, worker_info} <- handshake(socket, :unix, state, handshake_timeout) do
       {:ok,
        %{
          state
@@ -492,19 +493,19 @@ defmodule Portals.Connection do
              env: Keyword.get(opts, :env, []),
              cd: Keyword.get(opts, :cd)
            ),
-         {:ok, worker_info} <- handshake(port, :stdio, state.limits, handshake_timeout) do
+         {:ok, worker_info} <- handshake(port, :stdio, state, handshake_timeout) do
       {:ok,
        %{state | socket: port, lifecycle_port: port, status: :ready, worker_info: worker_info}}
     end
   end
 
-  defp handshake(socket_or_port, mode, limits, timeout) do
+  defp handshake(socket_or_port, mode, %{codec: codec, limits: limits}, timeout) do
     with {:ok, bytes} <- receive_one_frame(socket_or_port, mode, timeout),
-         {:ok, envelope, <<>>} <- @codec.decode(bytes, limits),
+         {:ok, envelope, <<>>} <- codec.decode(bytes, limits),
          {:ok, {:hello, fields}} <- Protocol.validate_envelope(envelope),
          {:ok, hello} <- Handshake.negotiate([Protocol.frame_tag(:hello) | fields]) do
       ready = Handshake.build_ready(limits)
-      {:ok, ready_bytes} = @codec.encode(ready, limits)
+      {:ok, ready_bytes} = codec.encode(ready, limits)
       :ok = transport_send(socket_or_port, mode, ready_bytes)
       {:ok, hello}
     else
@@ -538,7 +539,7 @@ defmodule Portals.Connection do
   # -- Runtime frame handling ---------------------------------------------
 
   defp handle_frame_bytes(data, state) do
-    case @codec.decode(data, state.limits) do
+    case state.codec.decode(data, state.limits) do
       {:ok, envelope, <<>>} ->
         dispatch_envelope(envelope, byte_size(data) + @frame_prefix_bytes, state)
 
@@ -874,7 +875,7 @@ defmodule Portals.Connection do
   end
 
   defp send_frame(state, frame) do
-    with {:ok, bytes} <- @codec.encode(frame, state.limits) do
+    with {:ok, bytes} <- state.codec.encode(frame, state.limits) do
       state.transport_mod.send(state.socket, bytes)
     end
   end

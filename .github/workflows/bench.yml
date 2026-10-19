@@ -1,0 +1,65 @@
+name: Benchmarks
+
+# Runs the benchmark suite (bench/) on demand and keeps the results as an
+# artifact and in the run summary. GitHub's shared runners are noisy:
+# compare numbers within one run, not across runs.
+on:
+  workflow_dispatch:
+    inputs:
+      parts:
+        description: "Parts to run (empty for all): codecs python_codecs transports rpc concurrency startup"
+        required: false
+        type: string
+      time:
+        description: "Seconds measured per scenario"
+        required: false
+        default: "5"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: Benchmarks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18.4"
+          otp-version: "27.3"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: bench/setup.sh
+      - name: Run
+        env:
+          BENCH_TIME: ${{ inputs.time }}
+          PARTS: ${{ inputs.parts }}
+        run: |
+          # PARTS is a space-separated list, split on purpose.
+          # shellcheck disable=SC2086
+          bench/run.sh $PARTS
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '## Benchmark results'
+            echo '```'
+            cat bench/results/environment.txt
+            echo '```'
+            for f in bench/results/*.txt; do
+              [ "$(basename "$f")" = environment.txt ] && continue
+              echo "### $(basename "$f" .txt)"
+              echo '```'
+              sed -n '/^Comparison:/,/^$/p; /^#####/p; /^| /p' "$f"
+              echo '```'
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-results
+          path: bench/results/

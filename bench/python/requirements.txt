@@ -1,0 +1,5 @@
+# Comparators only: the Portals worker itself needs nothing beyond the SDK.
+zerorpc==0.6.3
+msgpack==1.2.3
+pyzmq==27.2.0
+gevent==26.9.0
