@@ -3,8 +3,8 @@ package portals.fixtures;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import portals.DecodeException;
+import portals.Codec;
 import portals.Limits;
-import portals.MsgpackCodec;
 import portals.Portals;
 
 /**
@@ -25,12 +25,13 @@ public final class ConformanceWorker {
   }
 
   /**
-   * Classifies raw bytes exactly as the frame reader would. Returns the
-   * rejection reason name, or "ok" when the bytes are accepted.
+   * Classifies raw bytes exactly as the frame reader would, with the codec
+   * this worker is running. Returns the rejection reason name, or "ok" when
+   * the bytes are accepted.
    */
   public static String decodeReason(byte[] bytes) {
     try {
-      MsgpackCodec.Decoded decoded = MsgpackCodec.decode(bytes, Limits.DEFAULT);
+      Codec.Decoded decoded = Codec.selected().decode(bytes, Limits.DEFAULT);
       return decoded.restLength() == 0 ? "ok" : "trailing_bytes";
     } catch (DecodeException e) {
       return e.reason();

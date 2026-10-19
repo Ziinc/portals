@@ -11,7 +11,7 @@ SDK's public codec surface, exactly as the Ruby and Node bridges do.
 """
 
 from portals import __version__ as SDK_VERSION
-from portals.msgpack_codec import DecodeError, decode
+from portals.codec import DecodeError, decode
 from portals.protocol import DEFAULT_LIMITS, PROTOCOL_VERSION
 
 
@@ -23,7 +23,8 @@ def echo_term(value):
 
 
 def decode_reason(data):
-    """Classify raw bytes exactly as the frame reader would. Returns the
+    """Classify raw bytes exactly as the frame reader would, with the codec
+    this worker is running. Returns the
     rejection reason name, or "ok" when the bytes are accepted."""
 
     try:

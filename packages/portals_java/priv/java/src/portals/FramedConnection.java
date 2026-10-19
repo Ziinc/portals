@@ -19,7 +19,7 @@ import java.nio.file.Path;
  *
  * <p>Matches the BEAM's {@code {:packet, 4}} framing exactly: a 4-byte
  * big-endian length prefix followed by that many bytes of
- * MessagePack-encoded envelope. Reads happen on a single reader thread;
+ * envelope encoded with the selected {@link Codec}. Reads happen on a single reader thread;
  * writes may come from any handler thread and are serialized so frames
  * never interleave.
  */

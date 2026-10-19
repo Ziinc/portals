@@ -17,7 +17,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
 from portals import protocol as p  # noqa: E402
-from portals.msgpack_codec import encode  # noqa: E402
+from portals.codec import encode  # noqa: E402
 from portals.transport import FramedSocket, socket_path_from_argv  # noqa: E402
 
 if __name__ == "__main__":

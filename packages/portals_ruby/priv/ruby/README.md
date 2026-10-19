@@ -9,9 +9,13 @@ on the worker's import path. **Application developers should start with the
 [Ruby guide](../../../../guides/languages/ruby.md)**; this README documents the
 SDK itself.
 
-No gems required: the MessagePack codec (including the Erlang value
-extensions) is implemented in pure Ruby in `lib/portals/msgpack_codec.rb`,
-so a worker only needs a stock Ruby interpreter.
+No gems required: both wire codecs (protocol/v1.md §5.4) are implemented
+in pure Ruby, so a worker only needs a stock Ruby interpreter. The Erlang
+External Term Format (`lib/portals/etf_codec.rb`) is the default;
+MessagePack (`lib/portals/msgpack_codec.rb`) is used when the worker is
+started with `codec: :msgpack`. The BEAM tells the worker which one through
+the `PORTALS_CODEC` environment variable, read once at startup
+(`lib/portals/codec.rb`); handlers see the same Ruby values under either.
 
 ## Writing a worker
 
@@ -100,7 +104,7 @@ stdin/stdout fallback.
 ## Tests
 
 ```sh
-rake            # or: ruby test/test_msgpack_codec.rb && ruby test/test_streams.rb
+rake            # or: ruby test/test_etf_codec.rb && ruby test/test_msgpack_codec.rb && ruby test/test_streams.rb
 ```
 
 The cross-language conformance and integration suites live on the Elixir

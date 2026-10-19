@@ -296,8 +296,9 @@ Overloads are chosen by argument count.
   compile with `-cp "$(mix portals.sdk_path java | tail -n 1)"`, and never
   put a second `portals` jar on `:classpath`.
 - **Wrap raw bytes in `%Portals.Codec.Bin{}`.** A plain Elixir binary that
-  is not valid UTF-8 is decoded as a `String` with the invalid bytes
-  replaced by U+FFFD, so the data is silently corrupted. Wrapped bytes arrive
+  is not valid UTF-8 makes the worker reject the call before it runs, so
+  the call times out (under `codec: :msgpack` it is instead decoded as a
+  `String` with the invalid bytes replaced by U+FFFD). Wrapped bytes arrive
   as `byte[]`.
 - **`System.out` goes nowhere.** stdout and stderr are discarded under the
   default transport. Set `PORTALS_LOG_FILE`, or pass `.logger(message ->

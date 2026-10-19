@@ -14,8 +14,9 @@ const portals = require('../..');
 // compares the result to the term it sent.
 const echoTerm = (value) => value;
 
-// Classify raw bytes exactly as the frame reader would. Returns the
-// rejection reason name, or "ok" when the bytes are accepted.
+// Classify raw bytes exactly as the frame reader would, with the codec this
+// worker is running (PORTALS_CODEC). Returns the rejection reason name, or
+// "ok" when the bytes are accepted.
 function decodeReason(bytes) {
   try {
     const [, rest] = portals.codec.decode(Buffer.from(bytes), portals.protocol.DEFAULT_LIMITS);

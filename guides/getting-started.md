@@ -155,8 +155,9 @@ consumer slows the producer down instead of growing memory without bound.
 
 ## Values
 
-Values are encoded with MessagePack plus Erlang extensions, so most Elixir
-terms survive a round trip:
+Values are encoded with the Erlang External Term Format (or, with
+`codec: :msgpack`, MessagePack plus Erlang extensions; handlers see the same
+values either way), so most Elixir terms survive a round trip:
 
 | Elixir | Notes |
 |---|---|
@@ -172,9 +173,10 @@ terms survive a round trip:
 ## Gotchas (all languages)
 
 - **Wrap raw bytes in `%Portals.Codec.Bin{}`.** Elixir binaries are sent as
-  text. A binary that is not valid UTF-8 is corrupted or rejected
-  depending on the language. In Python it closes the worker's connection,
-  failing every call in flight on it.
+  text. Under the default ETF codec, a call carrying a binary that is not
+  valid UTF-8 is rejected by the worker before it runs, so it times out.
+  Under `codec: :msgpack` the bytes are corrupted or rejected depending on
+  the language; in Python that closes the worker's connection.
 - **Only return atoms the BEAM already knows.** A worker that sends an
   atom which does not exist on the BEAM (to stop atom-table exhaustion,
   Portals never creates atoms from worker input) breaks the protocol: the

@@ -14,7 +14,13 @@ codecs = [
      {:ok, _, _} = Portals.Codec.MessagePack.decode(bytes, limits)
      bytes
    end},
-  {"ETF (term_to_binary)", & &1,
+  {"Portals ETF", &%Portals.Codec.Bin{data: &1},
+   fn term ->
+     {:ok, bytes} = Portals.Codec.ETF.encode(term, limits)
+     {:ok, _, _} = Portals.Codec.ETF.decode(bytes, limits)
+     bytes
+   end},
+  {"term_to_binary (raw ETF)", & &1,
    fn term ->
      bytes = :erlang.term_to_binary(term)
      _ = :erlang.binary_to_term(bytes, [:safe])

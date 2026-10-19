@@ -16,7 +16,7 @@ Portals is an Elixir-first successor to ErlPort for invoking functions in truste
 
 The BEAM launches and monitors each worker through a BEAM Port, but RPC data uses one Unix-domain socket per worker by default. The BEAM creates and listens on the socket before launching the worker; the worker connects. Stdin/stdout framing is an automatic fallback only on platforms where Unix-domain sockets are unsupported. Linux is the only officially supported 1.0 platform.
 
-The protocol uses MessagePack compact tagged arrays and production extensions for Erlang-specific values. Protocol compatibility is an exact-version match. ETF is implemented only as an internal benchmark codec, both as a full alternate Portals path and in isolated codec microbenchmarks; it is not a supported production codec.
+The protocol carries frames in the Erlang External Term Format by default, with MessagePack compact tagged arrays and Erlang-value extensions as the alternative codec (`codec: :msgpack`); every SDK speaks both and hands handlers the same values under either. Protocol compatibility is an exact-version match. (ETF started as a benchmark-only codec; the benchmarks in `bench/` showed it faster on the BEAM and for large payloads, so it became the default.)
 
 Portals 1.0 targets behavioral—not source-level—compatibility with ErlPort through a new public API. It must include arbitrary module/function invocation, reverse BEAM callbacks, direct message delivery, and Erlang-value fidelity. Each language SDK ships in its own Hex package (`portals_python`, `portals_ruby`, `portals_javascript`, and later `portals_php`, `portals_java`, `portals_go`), released in lockstep with core `portals` from one monorepo, so applications install only the languages they use. Hex is the only distribution channel.
 
@@ -156,8 +156,8 @@ flowchart TB
 | `Portals.Transport.Unix` | Default per-worker Unix-domain socket implementation |
 | `Portals.Transport.Stdio` | Length-framed fallback on unsupported platforms |
 | `Portals.Codec` | Codec behaviour |
-| `Portals.Codec.MessagePack` | Mandatory portable codec |
-| `Portals.Codec.ETFBench` | Internal benchmark-only ETF implementation |
+| `Portals.Codec.ETF` | Default codec: Erlang External Term Format |
+| `Portals.Codec.MessagePack` | Alternative portable codec (`codec: :msgpack`) |
 | `Portals.Protocol` | Frame definitions, validation, capability negotiation |
 | `Portals.TermExtensions` | Safe Erlang-value encoding/decoding, including trusted local and distributed PIDs |
 | `Portals.CallbackSupervisor` | Supervised reentrant callback execution |
@@ -905,7 +905,7 @@ portals/
       telemetry.ex
       codec.ex
       codec/message_pack.ex
-      codec/etf_bench.ex
+      codec/etf.ex
       transport.ex
       transport/unix.ex
       transport/stdio.ex
@@ -1068,7 +1068,7 @@ Remaining implementation parameters to settle in PR-01 or PR-02:
 ## 20. Recommended decisions
 
 - Keep core and every SDK in one monorepo, and ship one Hex package per language (`portals_<language>`) in lockstep with `portals`, so applications install only the languages they use.
-- Use MessagePack compact tagged arrays as the only production codec; keep ETF internal and benchmark-only.
+- Use ETF as the default codec, with MessagePack compact tagged arrays as the alternative (superseding the earlier MessagePack-only decision after the `bench/` results).
 - Require exact protocol-version equality at handshake.
 - Use a BEAM Port for direct-worker lifecycle and one BEAM-created Unix socket per worker for RPC data.
 - Support trusted arbitrary local/distributed PID delivery after safe decoding and type validation.

@@ -9,8 +9,7 @@ on the worker's import path. **Application developers should start with the
 [Java guide](../../../../guides/languages/java.md)**; this README documents the
 SDK itself.
 
-No dependencies and no build tool: everything, including the MessagePack
-codec with the Erlang value extensions (`src/portals/MsgpackCodec.java`),
+No dependencies and no build tool: everything, including both wire codecs,
 uses only the JDK standard library. JDK 17+ is required (Unix-domain
 sockets come from `java.nio`'s `UnixDomainSocketAddress`).
 
@@ -104,17 +103,27 @@ new Worker()
     .streamFunction("math", "count", (stream, args) -> { ... })
 ```
 
+## Wire codec
+
+The BEAM picks the codec per worker (`codec: :etf | :msgpack`, default
+`:etf`) and passes it in `PORTALS_CODEC`, which the worker reads once at
+startup: `etf` (or unset) selects the Erlang External Term Format
+(`src/portals/EtfCodec.java`), `msgpack` selects MessagePack with the
+Erlang value extensions (`src/portals/MsgpackCodec.java`), and any other
+value makes `Worker.run` fail before connecting. Handlers see the same
+Java types under either.
+
 ## Value model
 
-| Wire | Java |
+| Wire (MessagePack / ETF) | Java |
 |---|---|
 | `nil` / booleans | `null` / `Boolean` |
 | integers | `Long`, or `BigInteger` beyond 64-bit signed range (bigints included) |
 | floats | `Double` (an integral `double` still encodes as a float) |
-| `str` | `String` |
-| `bin` | `byte[]` (encode a `byte[]` or `Bin` to force `bin`) |
-| arrays | `List<Object>` |
-| maps | string-keyed `Map<String, Object>` |
+| `str` / binary | `String` |
+| `bin` / `%Portals.Codec.Bin{}` | `byte[]` (encode a `byte[]` or `Bin` to force a byte buffer) |
+| arrays / lists (charlists included) | `List<Object>` |
+| maps | string-keyed `Map<String, Object>` (atom and integer keys become text) |
 | tuple / atom / improper list | `Tuple` / `Atom` / `ImproperList` |
 | pid / reference | opaque `Pid` / `Ref` (store and echo back, never construct) |
 

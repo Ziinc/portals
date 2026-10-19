@@ -75,6 +75,7 @@ public final class Worker {
   private final Map<String, Target> targetCache = new ConcurrentHashMap<>();
 
   private volatile Limits limits = Limits.DEFAULT;
+  private Codec codec = Codec.ETF;
   private FramedConnection conn;
   private ExecutorService callPool;
   private ExecutorService streamPool;
@@ -194,6 +195,9 @@ public final class Worker {
    */
   public void run(String... args) throws IOException {
     if (logger == null) logger = defaultLogger();
+    // The BEAM names the wire codec in PORTALS_CODEC; refuse an unknown one
+    // before connecting.
+    codec = Codec.selected();
 
     if (transport == Transport.STDIO) {
       conn = FramedConnection.stdio();
@@ -294,7 +298,7 @@ public final class Worker {
         maxStreams,
         List.of());
     try {
-      conn.sendFrame(MsgpackCodec.encode(hello, limits));
+      conn.sendFrame(codec.encode(hello, limits));
     } catch (DecodeException e) {
       throw new ProtocolException("cannot encode HELLO: " + e.getMessage());
     }
@@ -304,7 +308,7 @@ public final class Worker {
 
     List<Object> envelope;
     try {
-      envelope = MsgpackCodec.decodeEnvelope(payload, limits);
+      envelope = codec.decodeEnvelope(payload, limits);
     } catch (DecodeException e) {
       throw new ProtocolException("malformed READY: " + e.getMessage());
     }
@@ -377,7 +381,7 @@ public final class Worker {
   void handleFrame(byte[] payload) {
     List<Object> envelope;
     try {
-      envelope = MsgpackCodec.decodeEnvelope(payload, limits);
+      envelope = codec.decodeEnvelope(payload, limits);
     } catch (DecodeException e) {
       log("portals worker: dropping malformed frame: " + e.getMessage());
       return;
@@ -453,7 +457,7 @@ public final class Worker {
             limits.maxStreamByteCredit(),
             limits.maxQueuedStreamFrames(),
             bytes -> conn.sendFrame(bytes),
-            envelope -> MsgpackCodec.encode(envelope, limits));
+            envelope -> codec.encode(envelope, limits));
         streams.put(requestId, stream);
       }
     }
@@ -503,7 +507,7 @@ public final class Worker {
   private void respond(Object requestId, Object result) {
     byte[] bytes;
     try {
-      bytes = MsgpackCodec.encode(Arrays.asList(Protocol.RETURN, requestId, result), limits);
+      bytes = codec.encode(Arrays.asList(Protocol.RETURN, requestId, result), limits);
     } catch (DecodeException e) {
       Map<String, Object> error = Errors.buildErrorMap(e);
       error.put("message", "return value cannot be encoded: " + e.getMessage());
@@ -567,7 +571,7 @@ public final class Worker {
 
   void sendEnvelope(List<Object> envelope) {
     try {
-      sendBytes(MsgpackCodec.encode(envelope, limits));
+      sendBytes(codec.encode(envelope, limits));
     } catch (DecodeException e) {
       log("portals worker: cannot encode frame: " + e.getMessage());
     }

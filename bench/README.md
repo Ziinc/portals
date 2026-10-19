@@ -38,13 +38,11 @@ call.
 
 ## What is being compared
 
-- **Portals** runs with its production codec, MessagePack, and with
-  `Portals.Codec.ETFBench`, a benchmark-only codec that sends the Erlang
-  External Term Format instead (the Python SDK implements it under
-  `PORTALS_CODEC=etf`). The ETF path passes the same conformance suite as
-  MessagePack (`packages/portals_python/test/etf_worker_suite_test.exs`),
-  so both measure the same behaviour. Each runs over a Unix socket and
-  over the framed stdio fallback.
+- **Portals** runs with both of its codecs: the Erlang External Term
+  Format (`codec: :etf`, the default) and MessagePack (`codec: :msgpack`).
+  Both pass the same conformance suites, so both measure the same
+  behaviour. Each runs over a Unix socket and over the framed stdio
+  fallback.
 - **zerorpc** is the Python zerorpc 0.6.3 server (gevent, pyzmq, msgpack
   C extension) called from Elixir by `Bench.ZeroRPC`, a minimal zerorpc
   client over chumak (pure-Erlang ZeroMQ) and Msgpax. chumak only speaks
@@ -58,20 +56,22 @@ Binary payloads use each library's binary type: `%Portals.Codec.Bin{}`,
 
 ## Results
 
-One run of `bench/run.sh` on 2026-10-19: 4-core Intel Xeon @ 2.80GHz,
-Linux, Elixir 1.18.4 on OTP 25, Python 3.13.16. Medians (Benchee reports
-mean, deviation and 99th percentile too; see `results/`). Lower is better.
+Runs of `bench/run.sh` on 2026-10-19: 4-core Intel Xeon @ 2.80GHz, Linux,
+Elixir 1.18.4 on OTP 25, Python 3.13.16. Medians (Benchee reports mean,
+deviation and 99th percentile too; see `results/`). Lower is better. The
+RPC and codec tables are from the run after ETF became the default codec;
+the rest are from the first run.
 
 ### RPC: one call at a time
 
 | | `add(1, 2)` | 1 KiB text | 64 KiB bytes | 1 MiB bytes | 1,000 integers | 100 records |
 |---|---|---|---|---|---|---|
-| Portals: MessagePack, Unix socket | 179 µs | 198 µs | 396 µs | 10.65 ms | 2.40 ms | 4.32 ms |
-| Portals: MessagePack, stdio | 175 µs | 178 µs | 584 µs | 11.86 ms | 2.31 ms | 4.64 ms |
-| Portals: ETF, Unix socket | 190 µs | 195 µs | **342 µs** | **4.14 ms** | 1.75 ms | 3.73 ms |
-| Portals: ETF, stdio | 155 µs | 155 µs | 482 µs | 5.95 ms | 1.82 ms | 3.64 ms |
-| zerorpc: MessagePack, ZeroMQ/TCP | 894 µs | 835 µs | 1363 µs | 9.67 ms | **1.38 ms** | **1.73 ms** |
-| ErlPort: ETF, stdio | **82 µs** | **83 µs** | 356 µs | 7.74 ms | 1.74 ms | 3.88 ms |
+| Portals: ETF, Unix socket (default) | 180 µs | 192 µs | 362 µs | **4.02 ms** | 1.79 ms | 4.64 ms |
+| Portals: ETF, stdio | 164 µs | 175 µs | 606 µs | 6.08 ms | 1.87 ms | 4.00 ms |
+| Portals: MessagePack, Unix socket | 184 µs | 194 µs | 485 µs | 10.07 ms | 2.60 ms | 4.70 ms |
+| Portals: MessagePack, stdio | 183 µs | 171 µs | 689 µs | 12.33 ms | 2.69 ms | 4.47 ms |
+| zerorpc: MessagePack, ZeroMQ/TCP | 956 µs | 976 µs | 1513 µs | 11.15 ms | **1.49 ms** | **1.78 ms** |
+| ErlPort: ETF, stdio | **81 µs** | **102 µs** | **341 µs** | 8.58 ms | 1.78 ms | 3.61 ms |
 
 ### Concurrency: 1,000 `add` calls, 64 in flight
 
@@ -106,21 +106,25 @@ mean, deviation and 99th percentile too; see `results/`). Lower is better.
 
 | | `[1, 2]` | 1 KiB text | 64 KiB bytes | 1 MiB bytes | 1,000 integers | 100 records |
 |---|---|---|---|---|---|---|
-| Portals MessagePack | 2.2 µs | 3.2 µs | 7.9 µs | 1,270 µs | 331 µs | 1,047 µs |
-| ETF (`term_to_binary`) | **0.3 µs** | **0.6 µs** | 5.5 µs | 161 µs | **21 µs** | **55 µs** |
-| Msgpax | 1.1 µs | 1.2 µs | **4.2 µs** | **64 µs** | 198 µs | 342 µs |
-| Jason (bytes as base64) | 1.1 µs | 9.5 µs | 696 µs | 11,870 µs | 464 µs | 593 µs |
+| Portals ETF (default) | 0.7 µs | 0.9 µs | 6.5 µs | 216 µs | 40 µs | 127 µs |
+| `term_to_binary` (raw ETF) | **0.6 µs** | 0.9 µs | 5.9 µs | 231 µs | **23 µs** | **63 µs** |
+| Portals MessagePack | 2.1 µs | 2.3 µs | 7.4 µs | 1,136 µs | 187 µs | 1,218 µs |
+| Msgpax | 1.0 µs | 1.1 µs | **3.9 µs** | **68 µs** | 199 µs | 206 µs |
+| Jason (bytes as base64) | 1.1 µs | 9.2 µs | 689 µs | 11,535 µs | 328 µs | 566 µs |
+
+Portals ETF is `term_to_binary/1` plus a walk that enforces the protocol
+limits before encoding, which is what costs the extra on large lists.
 
 ### Python codecs: encode + decode one frame (best of 5)
 
 | | `[1, 2]` | 1 KiB text | 64 KiB bytes | 1 MiB bytes | 1,000 integers | 100 records |
 |---|---|---|---|---|---|---|
-| Portals MessagePack (pure Python) | 9.1 µs | 7.7 µs | 20 µs | 667 µs | 1,661 µs | 2,491 µs |
-| Portals ETF (pure Python) | 9.0 µs | 7.6 µs | 19 µs | 256 µs | 1,212 µs | 2,704 µs |
-| ErlPort ETF (pure Python) | 8.0 µs | 7.7 µs | 27 µs | 2,874 µs | 1,319 µs | 2,846 µs |
-| msgpack (C extension) | 1.1 µs | 1.3 µs | 6.3 µs | 248 µs | 53 µs | 149 µs |
-| pickle (protocol 5) | 1.7 µs | 1.6 µs | 6.3 µs | 153 µs | 45 µs | 104 µs |
-| json (bytes as base64) | 4.8 µs | 10 µs | 421 µs | 8,087 µs | 181 µs | 283 µs |
+| Portals ETF (pure Python, default) | 9.2 µs | 7.6 µs | 20 µs | 272 µs | 1,184 µs | 2,910 µs |
+| Portals MessagePack (pure Python) | 9.1 µs | 7.7 µs | 20 µs | 588 µs | 1,507 µs | 2,468 µs |
+| ErlPort ETF (pure Python) | 8.0 µs | 8.0 µs | 28 µs | 2,718 µs | 1,361 µs | 2,722 µs |
+| msgpack (C extension) | 1.2 µs | 1.4 µs | 6.5 µs | 227 µs | 53 µs | 149 µs |
+| pickle (protocol 5) | 1.7 µs | 1.6 µs | 5.9 µs | 132 µs | 49 µs | 107 µs |
+| json (bytes as base64) | 4.8 µs | 10 µs | 450 µs | 8,193 µs | 184 µs | 331 µs |
 
 ## What the numbers say
 
@@ -140,15 +144,16 @@ mean, deviation and 99th percentile too; see `results/`). Lower is better.
   reader thread and the pool threads contend for the GIL. A pool of 4
   workers roughly doubles it. ErlPort pipelines calls through one
   interpreter at over 30,000 calls/s.
-- **Large binaries: Portals over ETF is the fastest.** 1 MiB round trips
-  in 4.1 ms (Unix socket) against 7.7 ms for ErlPort, whose Python codec
-  is slow on large binaries, and 10.7 ms for Portals over MessagePack.
-- **Portals' MessagePack codec is the slow part on both sides.** On the
-  BEAM it is the slowest of the four codecs for large binaries (20x
-  Msgpax on 1 MiB) and records (3x Msgpax). In Python, the pure-Python
-  codecs (Portals' two and ErlPort's) are 15 to 30 times slower than the
-  msgpack C extension on structured data, which is why zerorpc, slow
-  everywhere else, is fastest on integers and records.
+- **ETF is the default codec because it is faster.** Against Portals'
+  MessagePack it cuts a 1 MiB round trip from 10.1 ms to 4.0 ms (ErlPort:
+  8.6 ms), 1,000 integers from 2.6 to 1.8 ms and 64 KiB from 485 to
+  362 µs, and is level elsewhere. On the BEAM it encodes and decodes up to
+  10 times faster than Portals' MessagePack codec (records), and level on
+  64 KiB binaries.
+- **The pure-Python codecs are the slow part on structured data.** Portals'
+  two and ErlPort's are 15 to 30 times slower than the msgpack C extension
+  on integers and records, which is why zerorpc, slow everywhere else, is
+  fastest on those.
 - **Transports matter little next to the rest.** stdio has the lowest
   latency for small frames, Unix sockets and TCP win for large ones, and
   every one of them is a fraction of the RPC numbers above. ZeroMQ via

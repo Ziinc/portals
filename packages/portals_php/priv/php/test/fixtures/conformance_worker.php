@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use Portals\Bin;
+use Portals\Codec;
 use Portals\DecodeError;
-use Portals\MsgpackCodec;
 use Portals\Protocol;
 
 /**
@@ -28,13 +28,14 @@ final class ConformanceWorker
     }
 
     /**
-     * Classify raw bytes exactly as the frame reader would. Returns the
-     * rejection reason name, or "ok" when the bytes are accepted.
+     * Classify raw bytes exactly as the frame reader would, with the codec
+     * the BEAM selected for this worker. Returns the rejection reason name,
+     * or "ok" when the bytes are accepted.
      */
     public static function decode_reason(Bin|string $bytes): string
     {
         try {
-            [, $rest] = MsgpackCodec::decode($bytes instanceof Bin ? $bytes->data : $bytes, Protocol::DEFAULT_LIMITS);
+            [, $rest] = Codec::decode($bytes instanceof Bin ? $bytes->data : $bytes, Protocol::DEFAULT_LIMITS);
             return $rest === '' ? 'ok' : 'trailing_bytes';
         } catch (DecodeError $e) {
             return $e->reason;

@@ -12,8 +12,8 @@ import (
 // Length-framed transport for the Go worker side.
 //
 // Matches the BEAM's {:packet, 4} framing exactly: a 4-byte big-endian
-// length prefix followed by that many bytes of MessagePack-encoded
-// envelope. A framed connection hides that framing so callers only ever see
+// length prefix followed by that many bytes of envelope, encoded with the
+// codec PORTALS_CODEC selects (wire_codec.go). A framed connection hides that framing so callers only ever see
 // whole envelopes. The stdio variant is the fallback for platforms without
 // Unix-socket support.
 

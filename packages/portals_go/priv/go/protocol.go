@@ -1,12 +1,12 @@
 // Package portals is the Go worker SDK for Portals.
 //
 // Full parity with the reference Python SDK: Unix-socket transport with a
-// framed stdio fallback, a dependency-free MessagePack codec including the
-// Erlang value extensions, the exact-version HELLO/READY handshake,
-// concurrent dispatch of registered module/function handlers, structured
-// error frames, reentrant callbacks, PID messaging, cooperative
-// cancellation, and bidirectional streaming with byte-credit windows,
-// frame-count caps and per-direction half-close.
+// framed stdio fallback, dependency-free Erlang External Term Format (the
+// default) and MessagePack codecs carrying the Erlang value model, the
+// exact-version HELLO/READY handshake, concurrent dispatch of registered
+// module/function handlers, structured error frames, reentrant callbacks,
+// PID messaging, cooperative cancellation, and bidirectional streaming
+// with byte-credit windows, frame-count caps and per-direction half-close.
 //
 // See protocol/v1.md for the wire protocol.
 package portals

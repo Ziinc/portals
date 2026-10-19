@@ -68,7 +68,15 @@ class EtfCodecTest(unittest.TestCase):
 
     def test_a_data_key_outside_a_bin_struct_stays_text(self):
         term, _ = decode(encode([{Atom("data"): "x", Atom("other"): 1}]))
-        self.assertEqual(term, [{Atom("data"): "x", Atom("other"): 1}])
+        self.assertEqual(term, [{"data": "x", "other": 1}])
+
+    def test_map_keys_become_text_as_under_messagepack(self):
+        # %{a: 1, 2 => 3, "s" => 4, nil => 5} from a BEAM.
+        beam = bytes.fromhex("837400000004610261036400016161016400036e696c61056d00000001736104")
+        term, _ = decode(beam)
+        self.assertEqual(term, [{"2": 3, "a": 1, "s": 4, "": 5}])
+        term, _ = decode(encode([{1: "x", Atom("k"): "y"}]))
+        self.assertEqual(term, [{"1": "x", "k": "y"}])
 
     def test_malformed_input_raises_decode_error(self):
         for data, reason in [
@@ -77,6 +85,7 @@ class EtfCodecTest(unittest.TestCase):
             (BEAM_BYTES[:-3], "truncated"),
             (bytes([131, 77]), "invalid_encoding"),
             (bytes([131, 109, 0, 0, 0, 1, 0xFF]), "invalid_encoding"),
+            (bytes([131, 119, 1, 0xFF]), "invalid_encoding"),
         ]:
             with self.subTest(data=data):
                 with self.assertRaises(DecodeError) as ctx:

@@ -110,8 +110,7 @@ roadmap.
 Portals with ErlPort and zerorpc, and its codecs and transports with the
 alternatives, with results. In short: ErlPort is about twice as fast on
 small calls (the Python worker's thread pool costs ~80 µs per call), and
-Portals' MessagePack codecs are its slowest part on large and structured
-payloads.
+Portals over ETF, its default codec, is the fastest on large binaries.
 
 ## Repository layout
 

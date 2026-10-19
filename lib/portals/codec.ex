@@ -1,7 +1,8 @@
 defmodule Portals.Codec do
   @moduledoc """
-  Behaviour implemented by every wire codec (`Portals.Codec.MessagePack` in
-  production, `Portals.Codec.ETFBench` for internal benchmarking only).
+  Behaviour implemented by every wire codec: `Portals.Codec.ETF` (the
+  default) and `Portals.Codec.MessagePack`, chosen per worker with the
+  `:codec` option (`:etf` or `:msgpack`).
 
   A codec encodes/decodes a single frame envelope (a list whose head is the
   integer frame tag) to/from a binary. Codecs never see connection or
