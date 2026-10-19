@@ -1,0 +1,63 @@
+name: Release
+
+# Pushing a vX.Y.Z tag (scripts/release.sh --tag) publishes core `portals`
+# and every `portals_<language>` package to Hex, once all of CI, including
+# the release dry run of every package, has passed. See RELEASING.md.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    name: Check the tag
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag matches the version and is on main
+        run: |
+          version=$(sed -n 's/^  @version "\(.*\)"$/\1/p' mix.exs)
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match mix.exs version $version"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is not on main"
+            exit 1
+          fi
+
+  ci:
+    name: CI
+    needs: tag
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish to Hex
+    needs: ci
+    runs-on: ubuntu-24.04
+    # Holds the HEX_API_KEY secret; add required reviewers to the
+    # environment to gate publishing on a manual approval.
+    environment:
+      name: hex
+      url: https://hex.pm/packages/portals
+    concurrency:
+      group: hex-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18.4"
+          otp-version: "27.3"
+      # portals_java ships a prebuilt jar, built with javac.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: scripts/publish_hex.sh
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}

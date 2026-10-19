@@ -5,7 +5,7 @@ defmodule PortalsPython.MixProject do
   @source_url "https://github.com/Ziinc/portals"
 
   # Inside the monorepo this package depends on core `portals` by path; a
-  # published copy (or PORTALS_PUBLISH=1, set by scripts/release.sh)
+  # published copy (or PORTALS_PUBLISH=1, set by scripts/publish_hex.sh)
   # depends on the identical Hex release instead. See RELEASING.md.
   @monorepo? File.exists?(Path.expand("../../.portals-monorepo", __DIR__)) and
                System.get_env("PORTALS_PUBLISH") != "1"

@@ -22,7 +22,7 @@ packages/portals_<language>/
   test/conformance_test.exs       Portals.Conformance.SDKSuite against the SDK
   test/guide/ + guide_test.exs    the language guide's example, run end to end
 examples/hello_live/              a Phoenix LiveView app calling all six languages
-scripts/                          test_all.sh, version.exs, release.sh
+scripts/                          test_all.sh, version.exs, release.sh, hex_dry_run.sh, publish_hex.sh
 ```
 
 Only `lib/`, the runtime part of `priv/`, `mix.exs`, `README.md` and
@@ -51,8 +51,9 @@ README.
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every pull request and on `main`, using
-the same scripts you run locally:
+`.github/workflows/ci.yml` runs on every pull request, on `main`, and as
+the first stage of every release (`.github/workflows/release.yml`, see
+RELEASING.md), using the same scripts you run locally:
 
 | Job | Runs |
 |---|---|
@@ -60,8 +61,7 @@ the same scripts you run locally:
 | Core | `scripts/check_project.sh .` on Elixir 1.14/OTP 25 and 1.18/OTP 27 |
 | `portals_<language>` | `scripts/check_project.sh packages/portals_<language>` and `scripts/sdk_tests.sh <language>`, one job per language. JavaScript installs Node.js, Bun, Deno and QuickJS and runs on all four. |
 | examples/hello_live | `scripts/check_project.sh examples/hello_live` with every runtime |
-| Docs | `scripts/ci/build_docs.sh`: ExDoc for every package, warnings as errors |
-| Hex packages | `scripts/version.exs check` and `scripts/check_hex_packages.sh` |
+| Release dry run | `scripts/hex_dry_run.sh`: version check, ExDoc for every package with warnings as errors, `mix hex.publish --dry-run` for core and a publish-mode `mix hex.build` for each language package. The tarballs are kept as the `hex-packages` artifact. |
 
 `scripts/check_project.sh` is formatting, unused locked dependencies,
 `--warnings-as-errors` compilation and `mix test`.
@@ -89,5 +89,5 @@ edit both together.
 4. Write `guides/languages/<language>.md` around a tested `test/guide/`
    example, and add the guide to core's `mix.exs` docs.
 5. Add the SDK's version constant to `scripts/version.exs`, the language
-   to `scripts/test_all.sh` and `scripts/release.sh`, and the package to
-   the README.
+   to `scripts/test_all.sh`, `scripts/hex_dry_run.sh` and
+   `scripts/publish_hex.sh`, and the package to the README.
