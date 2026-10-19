@@ -1,0 +1,5 @@
+/_build/
+/deps/
+/priv/bin/
+/priv/java/classes/
+erl_crash.dump

@@ -18,7 +18,7 @@ The BEAM launches and monitors each worker through a BEAM Port, but RPC data use
 
 The protocol uses MessagePack compact tagged arrays and production extensions for Erlang-specific values. Protocol compatibility is an exact-version match. ETF is implemented only as an internal benchmark codec, both as a full alternate Portals path and in isolated codec microbenchmarks; it is not a supported production codec.
 
-Portals 1.0 targets behavioral—not source-level—compatibility with ErlPort through a new public API. It must include arbitrary module/function invocation, reverse BEAM callbacks, direct message delivery, and Erlang-value fidelity. Python, Ruby, and Node.js SDKs ship inside the Hex package as one synchronized monorepo release.
+Portals 1.0 targets behavioral—not source-level—compatibility with ErlPort through a new public API. It must include arbitrary module/function invocation, reverse BEAM callbacks, direct message delivery, and Erlang-value fidelity. Each language SDK ships in its own Hex package (`portals_python`, `portals_ruby`, `portals_javascript`, and later `portals_php`, `portals_java`, `portals_go`), released in lockstep with core `portals` from one monorepo, so applications install only the languages they use. Hex is the only distribution channel.
 
 ZeroMQ is a regression reference rather than a release blocker. ErlPort is the replacement baseline; matching ErlPort performance is acceptable when Portals demonstrates materially better pooling, cancellation, supervision, bidirectional streaming, backpressure, telemetry, and health inspection.
 
@@ -100,6 +100,7 @@ Worker().run()
 - Remote TCP/TLS operation in the MVP.
 - Shared-memory or Arrow support in the MVP.
 - Automatic code generation from arbitrary source-language modules in the MVP.
+- Publishing worker SDKs to language registries (PyPI, RubyGems, npm, Packagist, Maven, the Go module proxy). Every SDK is distributed only inside its Hex package.
 
 ## 6. Target users
 
@@ -179,6 +180,10 @@ The bundled Python, Ruby, and Node.js SDKs each implement:
 - bidirectional streaming, byte credits, and half-close;
 - configurable file or callback logging;
 - graceful shutdown.
+
+Each SDK is bundled in the `priv/` directory of its language package, which exposes a `Portals.<Language>` module implementing `Portals.SDK`: `sdk_path/0` locates the SDK (valid in development and inside `mix release`), and `worker_opts/1` builds launch options that put it on the runtime's import path (`PYTHONPATH`, `RUBYLIB`, `NODE_PATH`, PHP `auto_prepend_file`, the Java classpath; Go workers reference it with a `go.mod` `replace` directive into `deps/`).
+
+The JavaScript SDK (`portals_javascript`) is one SDK for several runtimes: the same worker script runs on Node.js, Bun, Deno or QuickJS, selected with `Portals.JavaScript.worker_opts(runtime: ...)`. QuickJS, which has no Node APIs or sockets, runs through a bundled host shim over the stdio transport.
 
 Each SDK advertises its own unary concurrency and stream capacity. Foreign SDKs must keep the socket reader independent of handler execution so nested callbacks and out-of-order responses cannot deadlock the connection.
 
@@ -777,7 +782,7 @@ Concurrent workstreams:
 Exit criteria:
 
 - Python, Ruby, and Node.js pass the identical black-box conformance suite;
-- all are bundled inside the Hex package;
+- each ships in its own Hex package (`portals_<language>`), versioned in lockstep with `portals`;
 - version output and protocol mismatch diagnostics are consistent.
 
 ### Phase 8: Observability and benchmark consolidation
@@ -804,7 +809,7 @@ Exit criteria:
 
 ### Phase 9: Hardening and synchronized 1.0 release
 
-**Outcome:** One Linux-first Hex bundle is ready for stable use.
+**Outcome:** A Linux-first, lockstep-versioned set of Hex packages (`portals` plus one per language) is ready for stable use.
 
 Deliverables:
 
@@ -812,13 +817,13 @@ Deliverables:
 - security and atom/PID/reference decoding review;
 - migration guide from ErlPort behavior to the new Portals API;
 - operational runbook and examples for all three SDKs;
-- synchronized Hex bundle containing Elixir, Python, Ruby, and Node.js SDK files.
+- synchronized Hex release of `portals` and every `portals_<language>` package.
 
 Exit criteria:
 
 - no critical protocol, lifecycle, callback, streaming, or resource-bound defect;
 - strict protocol and synchronized release commitments are documented;
-- installation from the Hex bundle is tested on clean supported Linux systems.
+- installation of each language package from Hex is tested on clean supported Linux systems.
 
 ## 14. Recommended pull-request DAG
 
@@ -914,10 +919,13 @@ portals/
     v1.md
     vectors/
     malformed/
-  sdk/
-    python/
-    ruby/
-    node/
+  packages/
+    portals_python/      # Portals.Python + priv/python (the SDK)
+    portals_ruby/
+    portals_javascript/
+    portals_php/
+    portals_java/
+    portals_go/
   bench/
     scenarios/
     workers/
@@ -932,7 +940,7 @@ portals/
     operations.md
 ```
 
-All SDKs remain in this monorepo through 1.0 and are distributed as files inside the synchronized Hex package. Independent PyPI, RubyGems, or npm releases are outside the 1.0 commitment.
+All SDKs remain in this monorepo. Each `packages/portals_<language>` directory is its own Mix project, published as its own Hex package that bundles the SDK under `priv/`; inside the monorepo it depends on core by path, and once published on the identical `portals` release. One script publishes every package at one version and tags the commit. PyPI, RubyGems, npm, Packagist, Maven and Go module releases are a non-goal.
 
 ## 16. Testing strategy
 
@@ -992,7 +1000,7 @@ All SDKs remain in this monorepo through 1.0 and are distributed as files inside
 | NIF-based ZeroMQ binding affects VM stability or results | Operational mismatch | Disclose binding architecture; add libzmq native ceiling and optional pure-Erlang comparator |
 | Streaming introduces unbounded queues | Memory failures | Credit-based protocol and mandatory limits before public streaming release |
 | Complete Erlang extensions burden every SDK | Slower ecosystem expansion | Treat values as typed wrappers/opaque tokens and enforce them in shared conformance fixtures |
-| Exact-version matching creates lockstep upgrades | Deployment friction | Ship one synchronized bundle and fail startup with clear version diagnostics |
+| Exact-version matching creates lockstep upgrades | Deployment friction | Release every package in lockstep at one version, enforce it in CI, and fail startup with clear version diagnostics |
 | Reentrant callbacks deadlock or recurse indefinitely | Hung workers or resource exhaustion | Never run callbacks in the socket reader; bound depth and in-flight callbacks |
 | Arbitrary trusted PID delivery reaches sensitive processes | Application integrity risk | Make trusted-worker scope explicit; safe-decode and type-check; offer handler/envelope routing controls |
 | Worker descendants survive shutdown | Orphan processes | Explicitly exclude descendant ownership and document wrapper/container patterns |
@@ -1037,7 +1045,7 @@ All SDKs remain in this monorepo through 1.0 and are distributed as files inside
 ### 1.0
 
 - Stable Elixir API and exact protocol v1.
-- Python, Ruby, and Node.js production support from one Hex bundle.
+- Production support for every SDK, each from its own lockstep-versioned Hex package.
 - Pooling/overflow, cancellation, callbacks, messages, bidirectional streams, telemetry, and health inspection.
 - Fuzz, soak, security, and performance gates passed.
 - Operational and migration documentation complete.
@@ -1054,12 +1062,12 @@ Remaining implementation parameters to settle in PR-01 or PR-02:
 6. Encoding layout for PIDs, references, arbitrary integers, atoms, tuples, and improper lists.
 7. Distributed-PID behavior when the target node is disconnected and whether delivery remains fire-and-forget only.
 8. The ZeroMQ dirty-NIF binding, libzmq version, ErlPort commit, and Python runtime matrix to pin.
-9. How bundled Python/Ruby/Node SDK files are extracted or located at runtime without acting as native ecosystem packages.
+9. ~~How bundled SDK files are located at runtime without acting as native ecosystem packages.~~ Decided: each SDK lives in its language package's `priv/`, located through `Application.app_dir/2` and put on the runtime's import path by `Portals.<Language>.worker_opts/1`.
 10. Whether experimental stdio fallback is tested but unsupported on Linux or exposed as a supported alternative transport.
 
 ## 20. Recommended decisions
 
-- Keep Elixir, Python, Ruby, and Node.js in one monorepo and ship one synchronized Hex bundle through 1.0.
+- Keep core and every SDK in one monorepo, and ship one Hex package per language (`portals_<language>`) in lockstep with `portals`, so applications install only the languages they use.
 - Use MessagePack compact tagged arrays as the only production codec; keep ETF internal and benchmark-only.
 - Require exact protocol-version equality at handshake.
 - Use a BEAM Port for direct-worker lifecycle and one BEAM-created Unix socket per worker for RPC data.

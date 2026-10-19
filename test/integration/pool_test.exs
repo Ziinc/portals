@@ -3,16 +3,10 @@ defmodule Portals.Integration.PoolTest do
 
   @moduletag :integration
 
-  @worker_script Path.expand("../../sdk/python/tests/fixtures/run_worker.py", __DIR__)
-
-  defp python! do
-    System.find_executable("python3") ||
-      raise "python3 not available; required for Portals integration tests"
-  end
+  defp worker(opts), do: Portals.Test.PythonWorker.opts("run_worker.py", opts)
 
   test "calls are load-balanced across base workers" do
-    {:ok, pool} =
-      Portals.start_pool(command: python!(), args: [@worker_script], size: 3, max_overflow: 0)
+    {:ok, pool} = Portals.start_pool(worker(size: 3, max_overflow: 0))
 
     on_exit(fn -> Portals.Pool.stop(pool) end)
 
@@ -27,11 +21,11 @@ defmodule Portals.Integration.PoolTest do
   test "creates overflow workers under load and retires them when idle" do
     {:ok, pool} =
       Portals.start_pool(
-        command: python!(),
-        args: [@worker_script],
-        size: 1,
-        max_overflow: 2,
-        checkout_timeout: 2_000
+        worker(
+          size: 1,
+          max_overflow: 2,
+          checkout_timeout: 2_000
+        )
       )
 
     on_exit(fn -> Portals.Pool.stop(pool) end)
@@ -61,11 +55,11 @@ defmodule Portals.Integration.PoolTest do
   test "checkout_timeout is returned when every worker is saturated and overflow is exhausted" do
     {:ok, pool} =
       Portals.start_pool(
-        command: python!(),
-        args: [@worker_script],
-        size: 1,
-        max_overflow: 0,
-        checkout_timeout: 200
+        worker(
+          size: 1,
+          max_overflow: 0,
+          checkout_timeout: 200
+        )
       )
 
     on_exit(fn -> Portals.Pool.stop(pool) end)
@@ -83,8 +77,7 @@ defmodule Portals.Integration.PoolTest do
   end
 
   test "a crashed base worker is replaced automatically" do
-    {:ok, pool} =
-      Portals.start_pool(command: python!(), args: [@worker_script], size: 2, max_overflow: 0)
+    {:ok, pool} = Portals.start_pool(worker(size: 2, max_overflow: 0))
 
     on_exit(fn -> Portals.Pool.stop(pool) end)
 
@@ -98,7 +91,7 @@ defmodule Portals.Integration.PoolTest do
   end
 
   test "call!/5 raises Portals.CallError on a remote failure" do
-    {:ok, pool} = Portals.start_pool(command: python!(), args: [@worker_script], size: 1)
+    {:ok, pool} = Portals.start_pool(worker(size: 1))
     on_exit(fn -> Portals.Pool.stop(pool) end)
 
     assert_raise Portals.CallError, fn ->

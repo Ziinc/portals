@@ -1,0 +1,7 @@
+/_build/
+/deps/
+/doc/
+/cover/
+*.ez
+erl_crash.dump
+/priv/java/portals.jar

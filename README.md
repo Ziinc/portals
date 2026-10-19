@@ -1,137 +1,130 @@
-# portals
-The spiritual erlport successor
+# Portals
 
-See [`docs/prd.md`](docs/prd.md) for the full product/engineering PRD and
-delivery plan.
+Call Python, Ruby, JavaScript (Node.js, Bun, Deno or QuickJS), PHP, Java and
+Go from Elixir through
+supervised, pooled worker processes. Portals is a spiritual successor to
+[ErlPort](https://github.com/hdima/erlport).
+
+```elixir
+{:ok, 2} = Portals.Pool.call(MyApp.Python, "text_tools", "word_count", ["hello world"])
+```
+
+![A LiveView page calling a hello-world function in Python, Ruby, JavaScript on four runtimes, PHP, Java and Go](examples/hello_live/demo/hello_live.gif)
+
+*[`examples/hello_live`](https://github.com/Ziinc/portals/tree/main/examples/hello_live):
+one LiveView page calling `greeter.hello(name)` in a supervised worker pool
+per language, and per JavaScript runtime. The replies arrive independently,
+as each runtime answers.*
+
+Each worker is an ordinary program in its own language, running in its own
+OS process under OTP supervision. A crash, hang or bad output in a worker
+never takes down the BEAM. On top of plain calls you get:
+
+- **Pools** with overflow workers, least-busy scheduling and bounded
+  checkout.
+- **Structured errors**: `{:error, %Portals.Error{}}` with the remote
+  exception type, message and stack trace.
+- **Callbacks** from the worker into Elixir, and **messages** from the
+  worker to any PID.
+- **Bidirectional streaming** with byte-credit backpressure in both
+  directions.
+- **Deadlines and cooperative cancellation**.
+- **Exact protocol versioning**: every SDK speaks the same documented wire
+  protocol and passes the same conformance suite.
+
+## Install only the languages you use
+
+Core `portals` has no worker SDKs. Each language is its own Hex package
+that bundles its SDK. Nothing is installed from PyPI, RubyGems, npm,
+Packagist, Maven or the Go module proxy.
+
+| Language | Package | Guide |
+|---|---|---|
+| Python | [`portals_python`](https://hex.pm/packages/portals_python) | [Python guide](guides/languages/python.md) |
+| Ruby | [`portals_ruby`](https://hex.pm/packages/portals_ruby) | [Ruby guide](guides/languages/ruby.md) |
+| JavaScript (Node.js, Bun, Deno, QuickJS) | [`portals_javascript`](https://hex.pm/packages/portals_javascript) | [JavaScript guide](guides/languages/javascript.md) |
+| PHP | [`portals_php`](https://hex.pm/packages/portals_php) | [PHP guide](guides/languages/php.md) |
+| Java | [`portals_java`](https://hex.pm/packages/portals_java) | [Java guide](guides/languages/java.md) |
+| Go | [`portals_go`](https://hex.pm/packages/portals_go) | [Go guide](guides/languages/go.md) |
+
+```elixir
+def deps do
+  [
+    {:portals_python, "~> 0.1.0"}
+  ]
+end
+```
+
+Every package is released in lockstep with `portals` at the same version,
+so a worker SDK always speaks exactly the protocol the BEAM expects.
+
+## Quick start (Python)
+
+```python
+# priv/python/text_tools.py
+def word_count(text):
+    return len(text.split())
+```
+
+```python
+# priv/python/worker.py
+from portals import Worker
+
+Worker().run()
+```
+
+```elixir
+# lib/my_app/application.ex
+children = [
+  {Portals.Pool,
+   Portals.Python.worker_opts(
+     script: Application.app_dir(:my_app, "priv/python/worker.py"),
+     name: MyApp.Python,
+     size: 4
+   )}
+]
+```
+
+```elixir
+iex> Portals.Pool.call(MyApp.Python, "text_tools", "word_count", ["hello world"])
+{:ok, 2}
+```
+
+To see all six languages in one app, run the
+[`hello_live` example](https://github.com/Ziinc/portals/tree/main/examples/hello_live)
+shown at the top of this page.
+
+Start with [Getting started](guides/getting-started.md), then read the
+guide for your language. Each one walks through a complete worker covering
+calls, errors, callbacks, messages, streaming, deployment, gotchas and best
+practices.
 
 ## Status
 
-Phase 1 (value model, protocol, and conformance) is implemented:
+Pre-1.0. The protocol, Elixir API and six SDKs are implemented and tested.
+Linux is the supported platform. See
+[docs/prd.md](https://github.com/Ziinc/portals/blob/main/docs/prd.md) for the
+roadmap.
 
-- `protocol/v1.md` — the language-neutral wire protocol specification.
-- `lib/portals/protocol.ex` — frame tags, arities, and default limits.
-- `lib/portals/codec/message_pack.ex` — the mandatory MessagePack codec,
-  including the Erlang-value extensions in `lib/portals/term_extensions.ex`.
-- `lib/portals/handshake.ex` — exact-version `HELLO`/`READY` negotiation.
-- `lib/portals/conformance/runner.ex` — the black-box conformance runner,
-  driven by `protocol/vectors/golden.exs` and `protocol/malformed/fixtures.exs`.
+## Repository layout
 
-Phase 2 (lifecycle and transport) is implemented:
-
-- `lib/portals/socket_dir.ex` — private `0700` per-worker runtime
-  directories and stale-socket cleanup.
-- `lib/portals/transport/unix.ex` — the default per-worker Unix-domain
-  socket transport (`packet: 4` framing).
-- `lib/portals/transport/stdio.ex` — the experimental framed-stdio
-  fallback transport, for platforms without Unix-socket support.
-- `lib/portals/worker_lifecycle/port.ex` — launches and monitors the
-  direct worker through a BEAM Port, with graceful-then-forced shutdown.
-
-Phase 3 (unary RPC and the Python vertical slice) is implemented:
-
-- `lib/portals/connection.ex` — the connection state machine: handshake,
-  per-connection monotonic request IDs, out-of-order pending-call
-  tracking, cancellation, owner-exit handling, and deterministic failure
-  of every pending caller on worker crash or protocol violation.
-- `lib/portals/error.ex` — `%Portals.Error{}}`.
-- `lib/portals.ex` — the public `call/5`, `call!/5`, `async/5`, `await/2`,
-  `cancel/2` API (pre-pool: the first argument is a single worker
-  connection; `Portals.Pool` in Phase 4 will be a drop-in replacement).
-- `sdk/python/portals/` — the Python worker SDK: a dependency-free
-  MessagePack codec/transport, and a threaded dispatcher supporting
-  arbitrary `module.function` invocation with independent concurrent
-  calls (`sdk/python/portals/worker.py`).
-
-Phase 4 (pooling, overflow, deadlines, cancellation) is implemented:
-
-- `lib/portals/pool.ex` — `Portals.Pool`, a supervised set of base
-  workers plus on-demand `max_overflow` overflow workers. Least-in-flight
-  scheduling with round-robin tie-breaking; blocking checkout with an
-  independent `checkout_timeout` (execution timeout only starts once a
-  call is actually dispatched); idle overflow workers are retired
-  immediately; a crashed base worker is replaced automatically.
-- `Portals.start_pool/1` and `Portals.Pool.call/5`, `call!/5`, `async/5`,
-  `await/2`, `cancel/2`, `health/1` — the same shapes as the single-worker
-  API, now load-balanced across a pool.
-
-Phase 5 (reentrant callbacks and PID messaging) is implemented:
-
-- `Portals.Connection` now handles `CALLBACK` frames: each is dispatched
-  to an independent supervised task (never inline on the socket reader),
-  enforcing `max_callback_depth` and `max_in_flight_callbacks` and an
-  optional callback allowlist, and replies with `CALLBACK_RETURN`/
-  `CALLBACK_ERROR`. Reentrancy depth is self-reported by the trusted
-  worker and echoed back through nested `CALL`s automatically (see
-  `Portals.Callback.depth/0` and protocol/v1.md section 8).
-- `MESSAGE` frames deliver safely-decoded PIDs via ordinary `send/2`
-  (configurable `:wrapped`/`:raw` envelope).
-- `sdk/python/portals`: `portals.callback(module, function, args)` blocks
-  the calling handler's own thread for a BEAM-side result without
-  stalling the socket reader or other in-flight calls; `portals.send_message/2`
-  delivers values to a PID received as a call argument.
-
-Phase 7 (Ruby and Node.js parity) is implemented:
-
-- `sdk/ruby/` — the Ruby worker SDK (`Portals::Worker`): a dependency-free
-  MessagePack codec with the Erlang value extensions, Unix-socket and
-  framed-stdio transports, a bounded thread-pool dispatcher, reentrant
-  callbacks, PID messaging, cooperative cancellation, and bidirectional
-  streaming on its own thread pool.
-- `sdk/node/` — the Node.js worker SDK (`Worker`): the same protocol
-  surface, dependency-free, with async handlers, `AsyncLocalStorage`-backed
-  call context, and a reader loop that never awaits handler execution.
-- `sdk/java/` — the Java worker SDK (`portals.Worker`): the same protocol
-  surface using only the JDK (21+) standard library, with `java.nio`
-  Unix-domain sockets, separate fixed thread pools for unary calls and
-  streams, and reflection-based dispatch onto plain static methods.
-- `sdk/php/` — the PHP worker SDK (`Portals\Worker`, PHP 8.1+): the same
-  protocol surface, dependency-free (pure-PHP MessagePack codec with the
-  Erlang value extensions and bigints, no Composer packages), with each
-  call running in its own `Fiber` on a `stream_select` event loop so the
-  reader never waits on handler execution; driven by
-  `test/integration/php_worker_test.exs` and the SDK conformance suite.
-- `sdk/go/` — the Go worker SDK (`portals.NewWorker`): the same protocol
-  surface with only the standard library — a MessagePack codec with the
-  Erlang value extensions, Unix-socket and framed-stdio transports,
-  explicitly registered handlers running on their own goroutines (bounded
-  by `MaxConcurrency`, with streams budgeted separately), a per-call
-  `context.Context` for cooperative cancellation, reentrant callbacks, PID
-  messaging, and credit-based bidirectional streaming. The fixture
-  launcher builds the worker binary on first use.
-- `test/support/worker_suite.ex` — the shared black-box integration suite
-  every bundled SDK must pass, driven per SDK by
-  `test/integration/{ruby,node,java,php,go}_worker_test.exs`.
-- `test/conformance/sdk_conformance_test.exs` — replays
-  `protocol/vectors/golden.exs` and `protocol/malformed/fixtures.exs`
-  against every bundled SDK over a language-neutral bridge, and asserts their
-  version output and protocol-mismatch diagnostics agree.
-
-Run the Elixir test suite with `mix test` (includes integration tests that
-spawn real Python, Ruby, Node, Java, PHP and Go workers; requires `python3`,
-`ruby`, `node`, `php`, `go`, and `java`/`javac` 21+ on `PATH` — the Java and
-Go fixture workers are compiled automatically on first use). Each SDK also
-has its own unit tests:
-
-```sh
-cd sdk/python && python3 -m unittest discover -s tests
-cd sdk/ruby   && ruby -Ilib -Itest -e 'Dir["test/test_*.rb"].each { |f| require File.expand_path(f) }'
-cd sdk/node   && npm test
-cd sdk/java   && ./test.sh
-cd sdk/php    && php test/run.php
-cd sdk/go     && go test ./...
+```text
+lib/, test/            core `portals` (the Elixir side)
+protocol/              the wire protocol spec, golden vectors, malformed fixtures
+guides/                hexdocs guides, one page per language
+packages/portals_<language>/
+  lib/                 the Portals.<Language> launch helper
+  priv/<language>/     the bundled worker SDK, with its own unit tests
+  test/                the shared conformance suites run against that SDK
+examples/hello_live/   a Phoenix LiveView app calling every language and JS runtime
+scripts/               test_all.sh, version.exs, release.sh
 ```
 
-## Releasing
+See [CONTRIBUTING.md](https://github.com/Ziinc/portals/blob/main/CONTRIBUTING.md)
+for development and
+[RELEASING.md](https://github.com/Ziinc/portals/blob/main/RELEASING.md) for
+releases.
 
-Every bundled SDK reports the `mix.exs` version (the conformance suite
-checks this). Each release is one commit tagged twice:
+## License
 
-```sh
-git tag vX.Y.Z          # the Hex package
-git tag sdk/go/vX.Y.Z   # the Go module (github.com/Ziinc/portals/sdk/go)
-git push origin vX.Y.Z sdk/go/vX.Y.Z
-```
-
-Go module tags are effectively immutable once fetched through
-`proxy.golang.org`; fix a bad release with a new version (and a `retract`
-directive in `sdk/go/go.mod`), never by moving the tag.
+MIT

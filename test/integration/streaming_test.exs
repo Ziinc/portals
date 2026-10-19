@@ -11,15 +11,14 @@ defmodule Portals.Integration.StreamingTest do
 
   @moduletag :integration
 
-  @worker_script Path.expand("../../sdk/python/tests/fixtures/run_worker.py", __DIR__)
-
-  defp python! do
-    System.find_executable("python3") || System.find_executable("python") ||
-      raise "python3 not available; required for Portals integration tests"
-  end
-
   defp start_worker(opts \\ []) do
-    {:ok, conn} = Portals.start_worker([command: python!(), args: [@worker_script]] ++ opts)
+    {:ok, conn} =
+      Portals.start_worker(
+        Portals.Conformance.WorkerSuite.merge_opts(
+          Portals.Test.PythonWorker.opts("run_worker.py"),
+          opts
+        )
+      )
 
     on_exit(fn -> Portals.stop_worker(conn, 500) end)
     conn
