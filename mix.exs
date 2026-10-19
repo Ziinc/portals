@@ -14,8 +14,8 @@ defmodule Portals.MixProject do
       test_paths: ["test"],
       elixirc_paths: elixirc_paths(Mix.env()),
       description:
-        "Call Python, Ruby, Node.js, PHP, Java and Go from Elixir through supervised, " <>
-          "pooled worker processes. The spiritual successor to ErlPort.",
+        "Call Python, Ruby, JavaScript (Node.js, Bun, Deno, QuickJS), PHP, Java and Go from " <>
+          "Elixir through supervised, pooled worker processes. The spiritual successor to ErlPort.",
       package: package(),
       docs: docs(),
       source_url: @source_url,

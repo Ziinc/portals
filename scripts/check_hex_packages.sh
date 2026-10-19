@@ -18,7 +18,7 @@ mix deps.get >/dev/null
 mix hex.build --output "$root/_build/release/portals-$version.tar"
 
 # The jar ships prebuilt in portals_java, so build it before packaging.
-(cd packages/portals_java && mix portals_java.jar)
+(cd packages/portals_java && mix deps.get >/dev/null && mix portals_java.jar)
 
 for language in $languages; do
   output=$(cd "packages/portals_$language" && mix deps.get >/dev/null && mix hex.build \
