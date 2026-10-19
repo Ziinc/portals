@@ -104,9 +104,11 @@ elixir scripts/version.exs check        # also runs as part of core's mix test
 elixir scripts/version.exs bump 0.2.0   # rewrite all of them
 ```
 
-1. Bump the version and merge it to `main`. Optionally run
-   `scripts/release.sh` on `main` to run every test and the Hex dry run
-   locally.
+1. Bump the version: run the *Bump version* workflow (Actions → Bump
+   version → Run workflow) with the new version. It runs
+   `scripts/version.exs bump`, opens a pull request and starts CI on it.
+   Merge that pull request. Optionally run `scripts/release.sh` on `main`
+   to run every test and the Hex dry run locally.
 2. Create a GitHub release on `main` with a new tag `vX.Y.Z`. Its notes
    are the changelog.
 3. Publishing the release starts `.github/workflows/release.yml`: it
@@ -127,7 +129,9 @@ tarball in publish mode, leaving them all in `_build/release/` (the
 <https://hex.pm/dashboard/keys>, as the user who should own all seven
 packages, and store it as the `HEX_API_KEY` secret of a GitHub environment
 named `hex`. Add required reviewers to the environment to make every
-publish wait for an approval.
+publish wait for an approval. For the *Bump version* workflow, enable
+*Allow GitHub Actions to create and approve pull requests* under
+Settings → Actions → General.
 
 **When it fails:** before publishing (tag check, CI), delete the release
 and its tag, fix `main`, and release again. During publishing, re-run the
