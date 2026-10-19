@@ -1,8 +1,8 @@
 #!/bin/sh
 # Publishes core `portals` and every `portals_<language>` package, with their
 # docs, to Hex at the version in mix.exs. The release workflow
-# (.github/workflows/release.yml) runs this when a vX.Y.Z tag is pushed; see
-# RELEASING.md.
+# (.github/workflows/release.yml) runs this when a GitHub release is
+# published.
 #
 #     HEX_API_KEY=... scripts/publish_hex.sh
 #

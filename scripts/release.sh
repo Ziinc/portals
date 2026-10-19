@@ -1,17 +1,13 @@
 #!/bin/sh
-# Prepares a release of core `portals` and every `portals_<language>`
-# package at the version in mix.exs, and starts it. See RELEASING.md.
+# Checks that main is ready to release at the version in mix.exs: a clean
+# tree, matching version locations, no existing tag, every test, and the
+# Hex dry run. Publish by creating the vX.Y.Z GitHub release; see
+# CONTRIBUTING.md.
 #
-#     scripts/release.sh        # checks, tests and a Hex dry run
-#     scripts/release.sh --tag  # then tags vX.Y.Z and pushes the tag
-#
-# Pushing the tag starts .github/workflows/release.yml, which runs CI
-# (including the same dry run) and then publishes to Hex.
+#     scripts/release.sh
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-tag=false
-[ "${1:-}" = "--tag" ] && tag=true
 
 section() { printf '\n==> %s\n' "$1"; }
 fail() { echo "release: $*" >&2; exit 1; }
@@ -30,12 +26,4 @@ scripts/test_all.sh
 section "Hex dry run"
 scripts/hex_dry_run.sh
 
-if [ "$tag" = false ]; then
-  echo "Ready to release v$version. Run scripts/release.sh --tag to tag it and start the release workflow."
-  exit 0
-fi
-
-section "Tagging v$version"
-git tag "v$version"
-git push origin "v$version"
-echo "Pushed v$version; follow the Release workflow on GitHub Actions."
+section "Ready: create the v$version GitHub release on main to publish it"

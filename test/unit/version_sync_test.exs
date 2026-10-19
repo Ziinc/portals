@@ -2,7 +2,7 @@ defmodule Portals.VersionSyncTest do
   @moduledoc """
   Core `portals`, every `portals_<language>` package and the SDK each one
   bundles are released in lockstep, so every version location in the
-  monorepo must agree (see scripts/version.exs and RELEASING.md).
+  monorepo must agree (see scripts/version.exs).
   """
 
   use ExUnit.Case, async: true

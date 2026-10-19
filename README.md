@@ -121,9 +121,7 @@ scripts/               test_all.sh, version.exs, release.sh, hex_dry_run.sh, pub
 ```
 
 See [CONTRIBUTING.md](https://github.com/Ziinc/portals/blob/main/CONTRIBUTING.md)
-for development and
-[RELEASING.md](https://github.com/Ziinc/portals/blob/main/RELEASING.md) for
-releases.
+for development and releases.
 
 ## License
 

@@ -52,8 +52,8 @@ README.
 ## CI
 
 `.github/workflows/ci.yml` runs on every pull request, on `main`, and as
-the first stage of every release (`.github/workflows/release.yml`, see
-RELEASING.md), using the same scripts you run locally:
+the first stage of every release (see [Releasing](#releasing)), using the
+same scripts you run locally:
 
 | Job | Runs |
 |---|---|
@@ -91,3 +91,48 @@ edit both together.
 5. Add the SDK's version constant to `scripts/version.exs`, the language
    to `scripts/test_all.sh`, `scripts/hex_dry_run.sh` and
    `scripts/publish_hex.sh`, and the package to the README.
+
+## Releasing
+
+Core `portals` and every `portals_<language>` package are released
+together to Hex, at one version: the handshake requires the SDK and the
+BEAM side to match exactly. `scripts/version.exs` knows every place the
+version lives (each `mix.exs` and each SDK's version constant):
+
+```sh
+elixir scripts/version.exs check        # also runs as part of core's mix test
+elixir scripts/version.exs bump 0.2.0   # rewrite all of them
+```
+
+1. Bump the version and merge it to `main`. Optionally run
+   `scripts/release.sh` on `main` to run every test and the Hex dry run
+   locally.
+2. Create a GitHub release on `main` with a new tag `vX.Y.Z`. Its notes
+   are the changelog.
+3. Publishing the release starts `.github/workflows/release.yml`: it
+   checks the tag is `v` + the version in `mix.exs` and is on `main`,
+   runs all of CI (including the release dry run), then runs
+   `scripts/publish_hex.sh`. That publishes `portals` first, then each
+   language package with `PORTALS_PUBLISH=1`, which swaps its path
+   dependency on core for `{:portals, "~> X.Y.Z"}` from Hex. Every package's
+   docs go to hexdocs with it.
+
+The release dry run, `scripts/hex_dry_run.sh`, also runs on every pull
+request. It builds every package's docs (warnings as errors), runs
+`mix hex.publish --dry-run` for core, and builds each language package's
+tarball in publish mode, leaving them all in `_build/release/` (the
+`hex-packages` CI artifact). Nothing is uploaded.
+
+**Setup, once:** create a Hex API key with *API write* permission at
+<https://hex.pm/dashboard/keys>, as the user who should own all seven
+packages, and store it as the `HEX_API_KEY` secret of a GitHub environment
+named `hex`. Add required reviewers to the environment to make every
+publish wait for an approval.
+
+**When it fails:** before publishing (tag check, CI), delete the release
+and its tag, fix `main`, and release again. During publishing, re-run the
+*Publish to Hex* job: `scripts/publish_hex.sh` skips every package already
+on Hex at that version. A bad version can be reverted within an hour of
+publishing (24 hours for a package's first version) with
+`mix hex.publish --revert X.Y.Z` in each package; after that, release a
+new version and `mix hex.retire` the bad one.

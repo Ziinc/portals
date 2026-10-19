@@ -1,11 +1,11 @@
 name: Release
 
-# Pushing a vX.Y.Z tag (scripts/release.sh --tag) publishes core `portals`
-# and every `portals_<language>` package to Hex, once all of CI, including
-# the release dry run of every package, has passed. See RELEASING.md.
+# Publishing a GitHub release tagged vX.Y.Z publishes core `portals` and
+# every `portals_<language>` package to Hex, once all of CI, including the
+# release dry run of every package, has passed. See CONTRIBUTING.md.
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
 
 permissions:
   contents: read
