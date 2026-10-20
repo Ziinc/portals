@@ -10,11 +10,17 @@ it resolvable on every supported runtime (Node.js, Bun, Deno and QuickJS).
 [JavaScript guide](../../../../../guides/languages/javascript.md)**; this README
 documents the SDK itself.
 
-Zero dependencies: the MessagePack codec (including the Erlang value
-extensions) is implemented in `lib/msgpackCodec.js`, so a worker only needs
-a stock runtime — no `npm install` step. It runs unchanged on Node.js 18+,
-Bun and Deno 2 (through their Node APIs), and on QuickJS through
-`../quickjs/host.mjs`, which provides the Node APIs the SDK uses.
+Zero dependencies: both wire codecs are implemented in the SDK, the
+Erlang External Term Format (the default, `lib/etfCodec.js`) and
+MessagePack with the Erlang value extensions (`lib/msgpackCodec.js`), so a
+worker only needs a stock runtime — no `npm install` step. The BEAM picks
+the codec (`codec: :etf | :msgpack`) and passes it in `PORTALS_CODEC`;
+`lib/codec.js` reads it once at startup and refuses to start on any other
+value. Handlers see the same values under either codec.
+
+It runs unchanged on Node.js 18+, Bun and Deno 2 (through their Node APIs),
+and on QuickJS through `../quickjs/host.mjs`, which provides the Node APIs
+the SDK uses.
 
 ## Writing a worker
 

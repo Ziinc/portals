@@ -99,9 +99,10 @@ final class Reference
 }
 
 /**
- * Raw bytes (MessagePack `bin`, §5.2). PHP strings are byte strings, so a
- * plain string always encodes as `str`; wrap a payload in `Bin` to force
- * `bin`. Decoded `bin` payloads are always returned as `Bin`.
+ * Raw bytes (`%Portals.Codec.Bin{}`: MessagePack `bin`, §5.2, or the
+ * struct itself under ETF, §5.4). PHP strings are byte strings, so a plain
+ * string always encodes as text; wrap a payload in `Bin` to send bytes.
+ * Decoded byte payloads are always returned as `Bin`.
  */
 final class Bin implements \Stringable
 {
@@ -228,9 +229,9 @@ final class BigInt implements \Stringable
 }
 
 /**
- * A MessagePack map (string keys only, §5). Decoded maps are `Map`s rather
- * than PHP arrays so an empty map, or one whose keys look numeric, never
- * comes back to the BEAM as a list. Reads like an array (`$map['key']`,
+ * A map (string keys only, under either codec, §5). Decoded maps are
+ * `Map`s rather than PHP arrays so an empty map, or one whose keys look
+ * numeric, never comes back to the BEAM as a list. Reads like an array (`$map['key']`,
  * `foreach`, `count`). When encoding, a plain PHP array that is not a list
  * (`array_is_list`) is also sent as a map.
  */

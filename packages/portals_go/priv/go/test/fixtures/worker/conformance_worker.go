@@ -23,8 +23,9 @@ func registerConformanceWorker(w *portals.Worker) {
 		return args.Get(0), nil
 	})
 
-	// Classify raw bytes exactly as the frame reader would. Returns the
-	// rejection reason name, or "ok" when the bytes are accepted.
+	// Classify raw bytes exactly as the frame reader would, with the codec
+	// PORTALS_CODEC selected. Returns the rejection reason name, or "ok"
+	// when the bytes are accepted.
 	w.Handle(m, "decode_reason", func(c *portals.Call, args portals.Args) (any, error) {
 		data, err := args.Bytes(0)
 		if err != nil {

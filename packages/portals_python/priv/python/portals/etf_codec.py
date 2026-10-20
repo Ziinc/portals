@@ -1,6 +1,5 @@
-"""Benchmark-only Erlang External Term Format codec, the Python side of
-`Portals.Codec.ETFBench`. Selected with `PORTALS_CODEC=etf`; MessagePack
-(`msgpack_codec`) is the only supported wire codec.
+"""The Erlang External Term Format codec (protocol/v1.md section 5.4), the
+Python side of `Portals.Codec.ETF` and the default (see `codec`).
 
 Values map to the same Python types as under MessagePack:
 
@@ -8,7 +7,9 @@ Values map to the same Python types as under MessagePack:
   `bytes` (and `bytes` encode as that struct);
 * the atoms `nil`, `true` and `false` are `None`, `True` and `False`, and
   other atoms are `Atom`;
-* tuples are `tuple`, maps are `dict`, improper lists are `ImproperList`;
+* tuples are `tuple`, improper lists are `ImproperList`, and maps are
+  `dict` with text keys (atom and integer keys become their text, as the
+  MessagePack encoders do);
 * PIDs and references are opaque `Pid` / `Reference` wrapping their ETF
   bytes, which are written back verbatim.
 """
@@ -152,7 +153,8 @@ def _encode_term(term, out: bytearray, depth: int, limits: dict) -> None:
         _check_length(len(term), limits)
         out += bytes([MAP]) + struct.pack(">I", len(term))
         for key, value in term.items():
-            _encode_term(key, out, depth + 1, limits)
+            # Keys are sent as text, as under MessagePack.
+            _encode_term(key.name if isinstance(key, Atom) else str(key), out, depth + 1, limits)
             _encode_term(value, out, depth + 1, limits)
     elif isinstance(term, list):
         _check_length(len(term), limits)
@@ -267,29 +269,56 @@ def _decode_map(data: memoryview, pos: int, depth: int, limits: dict):
     (n,) = struct.unpack_from(">I", data, pos + 1)
     _check_length(n, limits)
     pos += 5
-    result = {}
-    raw_data = None
+    pairs = []
     for _ in range(n):
         key, pos = _decode_term(data, pos, depth + 1, limits)
         if key == _DATA_KEY and data[pos] == BINARY:
             # Kept as bytes until we know whether this is a Bin struct.
             (size,) = struct.unpack_from(">I", data, pos + 1)
             _need(data, pos + 5 + size)
-            raw_data = bytes(data[pos + 5 : pos + 5 + size])
-            result[key] = raw_data
+            pairs.append((key, _RawBinary(bytes(data[pos + 5 : pos + 5 + size]))))
             pos += 5 + size
         else:
             value, pos = _decode_term(data, pos, depth + 1, limits)
-            result[key] = value
-    if raw_data is not None:
-        # A `%Portals.Codec.Bin{}` struct comes back as `bytes`.
-        if n == 2 and result.get(_STRUCT_KEY) == _BIN_STRUCT:
-            return raw_data, pos
+            pairs.append((key, value))
+
+    if n == 2 and dict(pairs).get(_STRUCT_KEY) == _BIN_STRUCT:
+        raw = dict(pairs).get(_DATA_KEY)
+        if isinstance(raw, _RawBinary):
+            # A `%Portals.Codec.Bin{}` struct comes back as `bytes`.
+            return raw.data, pos
+
+    # Keys become text, as under MessagePack.
+    return {_key_text(key): _text(value) for key, value in pairs}, pos
+
+
+class _RawBinary:
+    __slots__ = ("data",)
+
+    def __init__(self, data):
+        self.data = data
+
+
+def _text(value):
+    if isinstance(value, _RawBinary):
         try:
-            result[_DATA_KEY] = raw_data.decode("utf-8")
+            return value.data.decode("utf-8")
         except UnicodeDecodeError as err:
             raise DecodeError(("invalid_encoding", "binary is not UTF-8")) from err
-    return result, pos
+    return value
+
+
+def _key_text(key) -> str:
+    if isinstance(key, str):
+        return key
+    if isinstance(key, Atom):
+        return key.name
+    if isinstance(key, int) and not isinstance(key, bool):
+        return str(key)
+    if key is None or isinstance(key, bool):
+        # nil/true/false decoded as None/True/False: Elixir's to_string/1.
+        return {None: "", True: "true", False: "false"}[key]
+    raise DecodeError(("invalid_encoding", f"unsupported map key {key!r}"))
 
 
 def _decode_atom(data: memoryview, pos: int):
@@ -301,7 +330,10 @@ def _decode_atom(data: memoryview, pos: int):
         start = pos + 3
     _need(data, start + n)
     encoding = "latin-1" if tag in (SMALL_ATOM, ATOM) else "utf-8"
-    return str(data[start : start + n], encoding), start + n
+    try:
+        return str(data[start : start + n], encoding), start + n
+    except UnicodeDecodeError as err:
+        raise DecodeError(("invalid_encoding", "atom is not UTF-8")) from err
 
 
 def _skip_atom(data: memoryview, pos: int) -> int:

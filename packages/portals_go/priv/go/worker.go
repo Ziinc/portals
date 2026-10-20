@@ -154,7 +154,13 @@ func (w *Worker) HandleStream(module, function string, h StreamHandler) {
 
 // Run connects, completes the handshake, and serves frames until the BEAM
 // closes the connection or sends SHUTDOWN. It returns nil on a clean close.
+//
+// It fails before connecting when PORTALS_CODEC names a codec this SDK does
+// not speak.
 func (w *Worker) Run() error {
+	if _, err := SelectedCodec(); err != nil {
+		return err
+	}
 	conn, err := w.connect()
 	if err != nil {
 		return err

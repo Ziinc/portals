@@ -11,11 +11,11 @@ import (
 
 func roundTrip(t *testing.T, term any) any {
 	t.Helper()
-	encoded, err := Encode(term, DefaultLimits)
+	encoded, err := EncodeMessagePack(term, DefaultLimits)
 	if err != nil {
 		t.Fatalf("encode %#v: %v", term, err)
 	}
-	decoded, rest, err := Decode(encoded, DefaultLimits)
+	decoded, rest, err := DecodeMessagePack(encoded, DefaultLimits)
 	if err != nil {
 		t.Fatalf("decode %#v: %v", term, err)
 	}
@@ -60,16 +60,16 @@ func TestSmallestIntegerEncodings(t *testing.T) {
 		70000: {0xCE, 0x00, 0x01, 0x11, 0x70},
 	}
 	for n, want := range cases {
-		got, _ := Encode(n, DefaultLimits)
+		got, _ := EncodeMessagePack(n, DefaultLimits)
 		if !bytes.Equal(got, want) {
-			t.Errorf("Encode(%d) = % x, want % x", n, got, want)
+			t.Errorf("EncodeMessagePack(%d) = % x, want % x", n, got, want)
 		}
 	}
 }
 
 func TestIntegersBelowTheLowerBoundUseTheBigintExtension(t *testing.T) {
 	n := int64(intLowerBound - 1)
-	encoded, _ := Encode(n, DefaultLimits)
+	encoded, _ := EncodeMessagePack(n, DefaultLimits)
 	if encoded[0] != 0xC7 || encoded[2] != extBigint {
 		t.Fatalf("expected an ext8 bigint, got % x", encoded)
 	}
@@ -130,7 +130,7 @@ func TestMalformedInputIsRejectedWithTheDocumentedReason(t *testing.T) {
 		"non_string_map_key":           {[]byte{0x81, 0x01, 0x02}, "invalid_encoding"},
 	}
 	for name, tc := range cases {
-		_, _, err := Decode(tc.data, DefaultLimits)
+		_, _, err := DecodeMessagePack(tc.data, DefaultLimits)
 		if got := reasonOf(err); got != tc.reason {
 			t.Errorf("%s: got %q (%v), want %q", name, got, err, tc.reason)
 		}
@@ -139,7 +139,7 @@ func TestMalformedInputIsRejectedWithTheDocumentedReason(t *testing.T) {
 
 func TestAtomsDecodeWithoutAnAtomTable(t *testing.T) {
 	data := append([]byte{0xC7, 20, 1}, "not_a_real_atom_xyzq"...)
-	term, _, err := Decode(data, DefaultLimits)
+	term, _, err := DecodeMessagePack(data, DefaultLimits)
 	if err != nil || term != Atom("not_a_real_atom_xyzq") {
 		t.Fatalf("got %#v, %v", term, err)
 	}
@@ -149,35 +149,35 @@ func TestLimitsAreEnforcedOnEncodeAndDecode(t *testing.T) {
 	limits := DefaultLimits
 	limits.MaxNestingDepth = 2
 	deep := []any{[]any{[]any{[]any{}}}}
-	if _, err := Encode(deep, limits); reasonOf(err) != "max_depth_exceeded" {
+	if _, err := EncodeMessagePack(deep, limits); reasonOf(err) != "max_depth_exceeded" {
 		t.Errorf("encode depth: %v", err)
 	}
-	encoded, _ := Encode(deep, DefaultLimits)
-	if _, _, err := Decode(encoded, limits); reasonOf(err) != "max_depth_exceeded" {
+	encoded, _ := EncodeMessagePack(deep, DefaultLimits)
+	if _, _, err := DecodeMessagePack(encoded, limits); reasonOf(err) != "max_depth_exceeded" {
 		t.Errorf("decode depth: %v", err)
 	}
 
 	limits = DefaultLimits
 	limits.MaxCollectionLength = 2
-	if _, err := Encode([]any{1, 2, 3}, limits); reasonOf(err) != "max_length_exceeded" {
+	if _, err := EncodeMessagePack([]any{1, 2, 3}, limits); reasonOf(err) != "max_length_exceeded" {
 		t.Errorf("encode length: %v", err)
 	}
 
 	limits = DefaultLimits
 	limits.MaxFrameSize = 8
-	if _, err := Encode(make([]byte, 16), limits); reasonOf(err) != "max_size_exceeded" {
+	if _, err := EncodeMessagePack(make([]byte, 16), limits); reasonOf(err) != "max_size_exceeded" {
 		t.Errorf("encode size: %v", err)
 	}
-	if _, _, err := Decode(make([]byte, 16), limits); reasonOf(err) != "max_size_exceeded" {
+	if _, _, err := DecodeMessagePack(make([]byte, 16), limits); reasonOf(err) != "max_size_exceeded" {
 		t.Errorf("decode size: %v", err)
 	}
 }
 
 func TestUnsupportedTypesAreCodecErrors(t *testing.T) {
-	if _, err := Encode(struct{}{}, DefaultLimits); reasonOf(err) != "invalid_encoding" {
+	if _, err := EncodeMessagePack(struct{}{}, DefaultLimits); reasonOf(err) != "invalid_encoding" {
 		t.Fatalf("got %v", err)
 	}
-	if _, err := Encode(map[int]any{1: 2}, DefaultLimits); reasonOf(err) != "invalid_encoding" {
+	if _, err := EncodeMessagePack(map[int]any{1: 2}, DefaultLimits); reasonOf(err) != "invalid_encoding" {
 		t.Fatalf("got %v", err)
 	}
 }

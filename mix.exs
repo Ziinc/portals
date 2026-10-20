@@ -72,7 +72,7 @@ defmodule Portals.MixProject do
           Portals.Handshake,
           Portals.Codec,
           Portals.Codec.MessagePack,
-          Portals.Codec.ETFBench,
+          Portals.Codec.ETF,
           Portals.TermExtensions,
           Portals.Transport,
           Portals.Transport.Unix,

@@ -16,6 +16,11 @@ defmodule Portals.Connection do
   moves the connection to `:closed`; it never crashes the caller or the
   BEAM. `Portals.Connection` does not restart itself — that is a pool's
   responsibility (Phase 4).
+
+  Frames use the `:codec` option: `:etf` (the default, `Portals.Codec.ETF`)
+  or `:msgpack` (`Portals.Codec.MessagePack`). The worker is told which one
+  through the `PORTALS_CODEC` environment variable, so SDK users never
+  configure it themselves.
   """
 
   use GenServer
@@ -38,7 +43,7 @@ defmodule Portals.Connection do
     :worker_info,
     :callback_sup,
     :callback_allowlist,
-    codec: Codec.MessagePack,
+    codec: Codec.ETF,
     message_envelope: :wrapped,
     next_request_id: 1,
     pending: %{},
@@ -57,7 +62,8 @@ defmodule Portals.Connection do
           handshake_timeout: timeout,
           name: GenServer.name(),
           callback_allowlist: [{module, atom, arity}] | nil,
-          message_envelope: :wrapped | :raw
+          message_envelope: :wrapped | :raw,
+          codec: :etf | :msgpack
         ]
 
   @spec start_link(start_opts) :: GenServer.on_start()
@@ -167,8 +173,7 @@ defmodule Portals.Connection do
       status: :starting,
       callback_sup: callback_sup,
       callback_allowlist: Keyword.get(opts, :callback_allowlist),
-      # Internal: Portals.Codec.ETFBench is selectable for benchmarks only.
-      codec: Keyword.get(opts, :codec, Codec.MessagePack),
+      codec: codec_module(Keyword.get(opts, :codec, :etf)),
       message_envelope: Keyword.get(opts, :message_envelope, :wrapped)
     }
 
@@ -465,7 +470,7 @@ defmodule Portals.Connection do
            WorkerLifecycle.Port.launch(
              command: Keyword.fetch!(opts, :command),
              args: Keyword.get(opts, :args, []) ++ [socket_path],
-             env: Keyword.get(opts, :env, []),
+             env: worker_env(opts),
              cd: Keyword.get(opts, :cd)
            ),
          {:ok, socket} <- Portals.Transport.Unix.accept(listen_socket, connect_timeout),
@@ -490,7 +495,7 @@ defmodule Portals.Connection do
            WorkerLifecycle.Port.launch_stdio(
              command: Keyword.fetch!(opts, :command),
              args: Keyword.get(opts, :args, []),
-             env: Keyword.get(opts, :env, []),
+             env: worker_env(opts),
              cd: Keyword.get(opts, :cd)
            ),
          {:ok, worker_info} <- handshake(port, :stdio, state, handshake_timeout) do
@@ -498,6 +503,22 @@ defmodule Portals.Connection do
        %{state | socket: port, lifecycle_port: port, status: :ready, worker_info: worker_info}}
     end
   end
+
+  # The worker learns its codec from PORTALS_CODEC, set last so it always
+  # matches the connection's.
+  defp worker_env(opts) do
+    Keyword.get(opts, :env, []) ++
+      [{"PORTALS_CODEC", codec_name(Keyword.get(opts, :codec, :etf))}]
+  end
+
+  defp codec_module(:etf), do: Codec.ETF
+  defp codec_module(:msgpack), do: Codec.MessagePack
+
+  defp codec_module(other),
+    do: raise(ArgumentError, "unknown codec #{inspect(other)}; expected :etf or :msgpack")
+
+  defp codec_name(:etf), do: "etf"
+  defp codec_name(:msgpack), do: "msgpack"
 
   defp handshake(socket_or_port, mode, %{codec: codec, limits: limits}, timeout) do
     with {:ok, bytes} <- receive_one_frame(socket_or_port, mode, timeout),

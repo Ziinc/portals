@@ -2,7 +2,7 @@
 
 require_relative 'protocol'
 require_relative 'values'
-require_relative 'msgpack_codec'
+require_relative 'codec'
 require_relative 'errors'
 require_relative 'transport'
 require_relative 'streams'
@@ -202,12 +202,12 @@ module Portals
         @max_streams,
         []
       ]
-      @conn.send_frame(MsgpackCodec.encode(hello, @limits))
+      @conn.send_frame(Codec.encode(hello, @limits))
 
       payload = @conn.recv_frame
       raise ConnectionClosed, 'connection closed during handshake' if payload.nil?
 
-      envelope, rest = MsgpackCodec.decode(payload, @limits)
+      envelope, rest = Codec.decode(payload, @limits)
       raise ProtocolError, 'trailing bytes after READY' unless rest.empty?
 
       tag = envelope[0]
@@ -273,8 +273,8 @@ module Portals
 
     def handle_frame(payload)
       begin
-        envelope, rest = MsgpackCodec.decode(payload, @limits)
-      rescue MsgpackCodec::DecodeError => e
+        envelope, rest = Codec.decode(payload, @limits)
+      rescue Codec::DecodeError => e
         log("portals worker: dropping malformed frame: #{e.reason.inspect}")
         return
       end
@@ -335,7 +335,7 @@ module Portals
             @limits['max_stream_byte_credit'],
             @limits['max_queued_stream_frames'],
             ->(bytes) { @conn.send_frame(bytes) },
-            ->(envelope) { MsgpackCodec.encode(envelope, @limits) }
+            ->(envelope) { Codec.encode(envelope, @limits) }
           )
           @streams[request_id] = stream
         end
@@ -480,7 +480,7 @@ module Portals
     end
 
     def send_envelope(envelope)
-      @conn.send_frame(MsgpackCodec.encode(envelope, @limits))
+      @conn.send_frame(Codec.encode(envelope, @limits))
     rescue ConnectionClosed, IOError, SystemCallError => e
       log("portals worker: send failed: #{e.class}: #{e.message}")
     end

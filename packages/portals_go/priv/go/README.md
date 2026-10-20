@@ -9,9 +9,13 @@ on the worker's import path. **Application developers should start with the
 [Go guide](../../../../guides/languages/go.md)**; this README documents the
 SDK itself.
 
-Standard library only: the MessagePack codec (including the Erlang value
-extensions) is implemented in `codec.go`, so a worker needs nothing but a
-Go toolchain to build.
+Standard library only: both wire codecs are implemented in the SDK, the
+Erlang External Term Format (the default, `etf_codec.go`) and MessagePack
+with the Erlang value extensions (`codec.go`), so a worker needs nothing
+but a Go toolchain to build. The BEAM picks the codec per worker
+(`codec: :etf | :msgpack`) and passes it in `PORTALS_CODEC`; the worker
+uses it for every frame, and `Run` fails on a value it does not know.
+Handlers see the same Go values under either codec.
 
 ## Installing
 
@@ -124,6 +128,9 @@ an `overload` error.
 | atom | `portals.Atom` | same |
 | PID / reference | `portals.Pid` / `portals.Reference` (opaque, comparable) | same |
 | improper list | `portals.ImproperList` | same |
+
+Map keys arrive as strings under either codec: atom keys become their
+name and integer keys their decimal text.
 
 `portals.Args` has typed accessors (`Int`, `BigInt`, `Float`, `String`,
 `Bytes`, `Bool`, `Pid`, `List`, `Map`, `Get`) that return an

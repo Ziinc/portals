@@ -1,10 +1,11 @@
 # Replays the protocol's golden vectors and malformed fixtures against the
-# bundled JavaScript SDK on each runtime (see `Portals.Conformance.SDKSuite`).
-for runtime <- Portals.JavaScript.runtimes() do
-  defmodule Module.concat(PortalsJavaScript.ConformanceTest, Macro.camelize(to_string(runtime))) do
-    @fixtures Path.expand("../priv/javascript/portals-worker/test/fixtures", __DIR__)
+# bundled JavaScript SDK on each runtime, once per codec (see
+# `Portals.Conformance.SDKSuite`).
+defmodule PortalsJavaScript.ConformanceTest.Opts do
+  @fixtures Path.expand("../priv/javascript/portals-worker/test/fixtures", __DIR__)
 
-    use Portals.Conformance.SDKSuite,
+  def opts(runtime, codec) do
+    [
       moduletag: [runtime: runtime],
       language: "javascript (#{runtime})",
       worker:
@@ -22,6 +23,20 @@ for runtime <- Portals.JavaScript.runtimes() do
           script: Path.join(@fixtures, "run_worker.js"),
           runtime: runtime,
           env: [{"PORTALS_PROTOCOL_VERSION", "999"}]
-        )
+        ),
+      codec: codec
+    ]
+  end
+end
+
+for runtime <- Portals.JavaScript.runtimes(),
+    {codec, suffix} <- [etf: "ETF", msgpack: "MessagePack"] do
+  defmodule Module.concat([
+              PortalsJavaScript.ConformanceTest,
+              Macro.camelize(to_string(runtime)),
+              suffix
+            ]) do
+    use Portals.Conformance.SDKSuite,
+        PortalsJavaScript.ConformanceTest.Opts.opts(runtime, codec)
   end
 end

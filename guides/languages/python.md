@@ -260,10 +260,10 @@ Inside the handler you can also call `stream.recv(timeout=...)`,
   that release the GIL (NumPy and friends). For CPU-bound pure Python,
   scale with pool `:size`, not `max_concurrency`.
 - **Wrap raw bytes in `%Portals.Codec.Bin{}`.** A plain Elixir binary is
-  sent as text. If it is not valid UTF-8, the Python worker cannot decode
-  the frame and **closes its connection**, failing every call in flight on
-  that worker. Image data, hashes and other binary payloads must be
-  wrapped.
+  sent as text. If it is not valid UTF-8, the worker rejects the call
+  before it runs, so it times out (under `codec: :msgpack` the worker
+  instead **closes its connection**, failing every call in flight on it).
+  Image data, hashes and other binary payloads must be wrapped.
 - **Any importable module is callable.** `CALL` imports whatever module it
   names, `os` and `subprocess` included. Never build module or function
   names from user input, and keep them as constants in Elixir.

@@ -13,10 +13,10 @@ defmodule Bench.Targets do
   @doc "The RPC targets compared in rpc.exs, in report order."
   def rpc do
     [
-      {"Portals: MessagePack, Unix socket", portals(transport: :unix)},
-      {"Portals: MessagePack, stdio", portals(transport: :stdio)},
-      {"Portals: ETF, Unix socket", portals(transport: :unix, codec: :etf)},
-      {"Portals: ETF, stdio", portals(transport: :stdio, codec: :etf)},
+      {"Portals: ETF, Unix socket", portals(transport: :unix)},
+      {"Portals: ETF, stdio", portals(transport: :stdio)},
+      {"Portals: MessagePack, Unix socket", portals(transport: :unix, codec: :msgpack)},
+      {"Portals: MessagePack, stdio", portals(transport: :stdio, codec: :msgpack)},
       {"zerorpc: MessagePack, ZeroMQ/TCP", zerorpc()},
       {"ErlPort: ETF, stdio", erlport()}
     ]
@@ -27,11 +27,7 @@ defmodule Bench.Targets do
     transport = Keyword.get(opts, :transport, :unix)
     size = opts[:size]
 
-    codec_opts =
-      case Keyword.get(opts, :codec, :msgpack) do
-        :msgpack -> []
-        :etf -> [codec: Portals.Codec.ETFBench, env: [{"PORTALS_CODEC", "etf"}]]
-      end
+    codec = Keyword.get(opts, :codec, :etf)
 
     worker_opts =
       Portals.Python.worker_opts(
@@ -39,8 +35,9 @@ defmodule Bench.Targets do
           script: Python.script("portals_worker.py"),
           python: Python.executable(),
           transport: transport,
-          args: [Atom.to_string(transport)]
-        ] ++ codec_opts ++ if(size, do: [size: size], else: [])
+          args: [Atom.to_string(transport)],
+          codec: codec
+        ] ++ if(size, do: [size: size], else: [])
       )
 
     {start, call} =

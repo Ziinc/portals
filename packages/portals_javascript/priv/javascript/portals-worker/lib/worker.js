@@ -20,7 +20,7 @@ const { AsyncLocalStorage } = require('async_hooks');
 const { runtime } = require('./runtime');
 
 const p = require('./protocol');
-const { encode, decode, DecodeError } = require('./msgpackCodec');
+const { encode, decode, DecodeError } = require('./codec');
 const { buildErrorMap, overloadErrorMap, protocolErrorMap } = require('./errors');
 const { FramedConnection, ConnectionClosed, socketPathFromArgv } = require('./transport');
 const { Stream, StreamProtocolError, FRAME_PREFIX_BYTES } = require('./streams');

@@ -18,12 +18,12 @@ class StreamTest < Minitest::Test
       WINDOW,
       MAX_FRAMES,
       ->(bytes) { @sent << bytes },
-      ->(envelope) { Portals::MsgpackCodec.encode(envelope, Portals::Protocol::DEFAULT_LIMITS) }
+      ->(envelope) { Portals::Codec.encode(envelope, Portals::Protocol::DEFAULT_LIMITS) }
     )
   end
 
   def sent_frames
-    @sent.map { |bytes| Portals::MsgpackCodec.decode(bytes, Portals::Protocol::DEFAULT_LIMITS)[0] }
+    @sent.map { |bytes| Portals::Codec.decode(bytes, Portals::Protocol::DEFAULT_LIMITS)[0] }
   end
 
   def test_initial_grant_offers_the_whole_window_once
@@ -81,7 +81,7 @@ class StreamTest < Minitest::Test
   end
 
   def test_send_is_charged_the_full_frame_size
-    payload = Portals::MsgpackCodec.encode(
+    payload = Portals::Codec.encode(
       [Portals::Protocol::STREAM_DATA, 7, 'payload'],
       Portals::Protocol::DEFAULT_LIMITS
     )
