@@ -52,8 +52,9 @@ class ImproperList {
   }
 }
 
-// Forces MessagePack float64 encoding for an integral JS number, which
-// would otherwise encode as an integer (protocol/v1.md §5).
+// Forces float encoding (MessagePack float64, ETF NEW_FLOAT_EXT) for an
+// integral JS number, which would otherwise encode as an integer
+// (protocol/v1.md §5).
 class Float {
   constructor(value) {
     this.value = Number(value);

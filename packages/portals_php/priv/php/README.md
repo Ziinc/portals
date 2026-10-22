@@ -10,10 +10,14 @@ on the worker's import path. **Application developers should start with the
 SDK itself.
 
 Requires PHP 8.1+ (64-bit) and nothing else: no Composer packages and no
-optional extensions. The MessagePack codec (including the Erlang value
-extensions and arbitrary-precision bigints) is pure PHP in
-`src/MsgpackCodec.php`; only core features and the `mbstring` extension
-that every standard build bundles are used.
+optional extensions. Both wire codecs (protocol/v1.md §5.4) are pure PHP,
+including the Erlang values and arbitrary-precision bigints: the Erlang
+External Term Format in `src/EtfCodec.php` (the default) and MessagePack in
+`src/MsgpackCodec.php`. The BEAM picks one per worker (`codec: :etf |
+:msgpack`) through the `PORTALS_CODEC` environment variable, which the SDK
+reads once at startup (`src/Codec.php`); any other value stops the worker.
+Only core features and the `mbstring` extension that every standard build
+bundles are used.
 
 ## Concurrency model
 
@@ -117,18 +121,19 @@ constructor) and reused. Mark streaming targets with
 |---|---|
 | `nil`, booleans, floats | `null`, `bool`, `float` |
 | integers | `int`; beyond 64-bit signed range, `Portals\BigInt` |
-| `"text"` (MessagePack `str`) | `string` |
-| `%Portals.Codec.Bin{}` (MessagePack `bin`) | `Portals\Bin` |
+| `"text"` (binaries) | `string` |
+| `%Portals.Codec.Bin{}` | `Portals\Bin` |
 | lists | list `array` |
-| maps | `Portals\Map` (array-like); any non-list `array` encodes as a map |
+| maps | `Portals\Map` with string keys (array-like); any non-list `array` encodes as a map |
 | tuples / atoms | `Portals\Tuple` / `Portals\Atom` |
 | PIDs / references | opaque `Portals\Pid` / `Portals\Reference` |
 | improper lists | `Portals\ImproperList` |
 
 Decoded maps are `Map` objects rather than arrays so that an empty map, or
-one with numeric-looking keys, is never sent back as a list. Plain PHP
-strings are always sent as `str`; wrap bytes in `new Portals\Bin(...)` to
-send `bin`.
+one with numeric-looking keys, is never sent back as a list. Map keys are
+always text under either codec: atom and integer keys arrive as their
+string form. Plain PHP strings are always sent as text binaries; wrap bytes
+in `new Portals\Bin(...)` to send them as `%Portals.Codec.Bin{}`.
 
 ## Handler context
 

@@ -44,4 +44,15 @@ if [ "$languages" = "$all" ]; then
   fi
 fi
 
+# The benchmark suite's smoke tests need its Python environment
+# (bench/setup.sh).
+if [ "$languages" = "$all" ]; then
+  if [ -x "$root/bench/.venv/bin/python" ]; then
+    section "bench (smoke tests)"
+    "$root/scripts/check_project.sh" "$root/bench"
+  else
+    section "bench: skipped (run bench/setup.sh first)"
+  fi
+fi
+
 section "OK"

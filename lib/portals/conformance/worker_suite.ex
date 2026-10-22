@@ -287,7 +287,7 @@ defmodule Portals.Conformance.WorkerSuite do
           state = :sys.get_state(conn)
 
           frame = [Portals.Protocol.frame_tag(:callback), 999_999, "NoSuchModule", "nope", []]
-          {:ok, bytes} = Portals.Codec.MessagePack.encode(frame, state.limits)
+          {:ok, bytes} = state.codec.encode(frame, state.limits)
           send(conn, {:tcp, state.socket, bytes})
 
           Process.sleep(100)

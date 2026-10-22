@@ -22,6 +22,7 @@ packages/portals_<language>/
   test/conformance_test.exs       Portals.Conformance.SDKSuite against the SDK
   test/guide/ + guide_test.exs    the language guide's example, run end to end
 examples/hello_live/              a Phoenix LiveView app calling all six languages
+bench/                            benchmarks: Portals vs ETF, zerorpc and ErlPort, codecs, transports
 scripts/                          test_all.sh, version.exs, release.sh, hex_dry_run.sh, publish_hex.sh
 ```
 
@@ -61,6 +62,7 @@ same scripts you run locally:
 | Core | `scripts/check_project.sh .` on Elixir 1.14/OTP 25 and 1.18/OTP 27 |
 | `portals_<language>` | `scripts/check_project.sh packages/portals_<language>` and `scripts/sdk_tests.sh <language>`, one job per language. JavaScript installs Node.js, Bun, Deno and QuickJS and runs on all four. |
 | examples/hello_live | `scripts/check_project.sh examples/hello_live` with every runtime |
+| bench (smoke tests) | `bench/setup.sh`, then `scripts/check_project.sh bench`: every benchmark target and transport returns what it was sent. The benchmarks themselves run on demand (`.github/workflows/bench.yml`, see [bench/README.md](bench/README.md)). |
 | Release dry run | `scripts/hex_dry_run.sh`: version check, ExDoc for every package with warnings as errors, `mix hex.publish --dry-run` for core and a publish-mode `mix hex.build` for each language package. The tarballs are kept as the `hex-packages` artifact. |
 
 `scripts/check_project.sh` is formatting, unused locked dependencies,

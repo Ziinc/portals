@@ -1,10 +1,11 @@
 package portals;
 
 /**
- * Forces MessagePack {@code bin} encoding (protocol/v1.md §5.2). A plain
- * {@code byte[]} already encodes as {@code bin} and decoded {@code bin}
- * payloads always come back as {@code byte[]}; this wrapper exists for
- * callers that want an immutable, value-comparable binary.
+ * Forces byte-buffer encoding: MessagePack {@code bin} (protocol/v1.md
+ * §5.2), or a {@code %Portals.Codec.Bin{}} struct under ETF (§5.4). A plain
+ * {@code byte[]} already encodes that way and decoded byte buffers always
+ * come back as {@code byte[]}; this wrapper exists for callers that want an
+ * immutable, value-comparable binary.
  */
 public final class Bin {
   private final byte[] data;

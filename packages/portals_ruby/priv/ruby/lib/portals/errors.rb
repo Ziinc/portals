@@ -31,8 +31,9 @@ module Portals
     end
 
     # Ruby builds exception messages (and backtraces) as BINARY strings,
-    # which the codec would send as MessagePack `bin`; error text must be
-    # `str`, so reinterpret it as UTF-8 and replace any invalid bytes.
+    # which the codec would send as bytes (MessagePack `bin`, ETF's
+    # `%Portals.Codec.Bin{}`); error text must be text, so reinterpret it
+    # as UTF-8 and replace any invalid bytes.
     def text(value)
       value.to_s.dup.force_encoding(Encoding::UTF_8).scrub
     end

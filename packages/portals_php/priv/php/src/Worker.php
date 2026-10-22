@@ -168,14 +168,14 @@ final class Worker
     private function handshake(): void
     {
         $hello = [Protocol::HELLO, $this->protocolVersion, 'php' . PHP_VERSION, $this->maxConcurrency, $this->maxStreams, []];
-        $this->conn->sendFrame(MsgpackCodec::encode($hello, $this->limits));
+        $this->conn->sendFrame(Codec::encode($hello, $this->limits));
 
         $payload = $this->conn->recvFrameBlocking();
         if ($payload === null) {
             throw new ConnectionClosed('connection closed during handshake');
         }
 
-        [$envelope, $rest] = MsgpackCodec::decode($payload, $this->limits);
+        [$envelope, $rest] = Codec::decode($payload, $this->limits);
         if ($rest !== '') {
             throw new ProtocolError('trailing bytes after READY');
         }
@@ -250,7 +250,7 @@ final class Worker
     private function handleFrame(string $payload): void
     {
         try {
-            [$envelope, $rest] = MsgpackCodec::decode($payload, $this->limits);
+            [$envelope, $rest] = Codec::decode($payload, $this->limits);
         } catch (DecodeError $e) {
             ($this->log)("portals worker: dropping malformed frame: {$e->getMessage()}");
             return;
@@ -340,7 +340,7 @@ final class Worker
             (int) $this->limits['max_stream_byte_credit'],
             (int) $this->limits['max_queued_stream_frames'],
             fn (string $bytes) => $this->conn->sendFrame($bytes),
-            fn (array $envelope) => MsgpackCodec::encode($envelope, $this->limits),
+            fn (array $envelope) => Codec::encode($envelope, $this->limits),
             $this->loop
         );
         $this->streams[$this->key($requestId)] = $stream;
@@ -561,7 +561,7 @@ final class Worker
     private function sendEnvelope(array $envelope): void
     {
         try {
-            $this->conn?->sendFrame(MsgpackCodec::encode($envelope, $this->limits));
+            $this->conn?->sendFrame(Codec::encode($envelope, $this->limits));
         } catch (\Throwable $e) {
             ($this->log)("portals worker: send failed: {$e->getMessage()}");
             // A result that cannot be encoded must still terminate its call.
@@ -573,7 +573,7 @@ final class Worker
                     Errors::buildErrorMap(new \RuntimeException('result could not be encoded: ' . $e->getMessage())),
                 ];
                 try {
-                    $this->conn?->sendFrame(MsgpackCodec::encode($fallback, $this->limits));
+                    $this->conn?->sendFrame(Codec::encode($fallback, $this->limits));
                 } catch (\Throwable) {
                     // Nothing more can be done for this call.
                 }

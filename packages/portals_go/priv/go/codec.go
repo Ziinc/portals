@@ -11,7 +11,8 @@ import (
 
 // Pure-Go MessagePack codec implementing the exact subset used by the
 // Portals v1 wire protocol, including the Erlang-value extensions
-// (protocol/v1.md section 5). Deliberately dependency-free, like the other
+// (protocol/v1.md section 5). Selected with PORTALS_CODEC=msgpack; ETF
+// (etf_codec.go) is the default, see wire_codec.go. Deliberately dependency-free, like the other
 // bundled SDKs, so the ext-type semantics stay byte-for-byte identical to
 // lib/portals/codec/message_pack.ex.
 
@@ -50,9 +51,9 @@ func codecErr(reason string, detail any) *CodecError {
 	return &CodecError{Reason: reason, Detail: detail}
 }
 
-// Encode encodes one frame envelope (or any term) to bytes, enforcing
-// limits.
-func Encode(term any, limits Limits) ([]byte, error) {
+// EncodeMessagePack encodes one frame envelope (or any term) to
+// MessagePack bytes, enforcing limits.
+func EncodeMessagePack(term any, limits Limits) ([]byte, error) {
 	e := encoder{limits: limits}
 	if err := e.encode(term, 0); err != nil {
 		return nil, err
@@ -63,8 +64,9 @@ func Encode(term any, limits Limits) ([]byte, error) {
 	return e.buf, nil
 }
 
-// Decode decodes one term from data, returning it and any trailing bytes.
-func Decode(data []byte, limits Limits) (term any, rest []byte, err error) {
+// DecodeMessagePack decodes one MessagePack term from data, returning it
+// and any trailing bytes.
+func DecodeMessagePack(data []byte, limits Limits) (term any, rest []byte, err error) {
 	if len(data) > limits.MaxFrameSize {
 		return nil, nil, codecErr("max_size_exceeded", len(data))
 	}

@@ -182,6 +182,25 @@ class Buffer extends Uint8Array {
     return utf8Decode(this, start, end);
   }
 
+  // `write(string[, offset[, length]][, encoding])`: UTF-8 only. Returns
+  // the bytes written; like Node, never writes a partial character.
+  write(string, offset = 0, length, encoding) {
+    if (typeof offset === 'string') [offset, length, encoding] = [0, undefined, offset];
+    if (typeof length === 'string') [length, encoding] = [undefined, length];
+    if (encoding && !/^utf-?8$/i.test(encoding)) {
+      throw new Error(`Buffer.write: unsupported encoding ${encoding}`);
+    }
+    const room = Math.min(length ?? Infinity, this.length - offset);
+    let bytes = utf8Encode(string);
+    if (bytes.length > room) {
+      let n = Math.max(room, 0);
+      while (n > 0 && (bytes[n] & 0xc0) === 0x80) n--;
+      bytes = bytes.slice(0, n);
+    }
+    this.set(bytes, offset);
+    return bytes.length;
+  }
+
   equals(other) {
     if (this.length !== other.length) return false;
     for (let i = 0; i < this.length; i++) if (this[i] !== other[i]) return false;

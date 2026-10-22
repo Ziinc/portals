@@ -8,7 +8,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 
 const { Stream, StreamClosed, StreamProtocolError, FRAME_PREFIX_BYTES } = require('../lib/streams');
-const { encode, decode } = require('../lib/msgpackCodec');
+// The codec PORTALS_CODEC selects (ETF unless set), as the worker uses.
+const { encode, decode } = require('../lib/codec');
 const { DEFAULT_LIMITS, STREAM_DATA, CREDIT, HALF_CLOSE } = require('../lib/protocol');
 const { streamHandler, isStreamHandler } = require('../lib/worker');
 

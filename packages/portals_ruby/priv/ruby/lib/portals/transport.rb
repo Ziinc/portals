@@ -5,7 +5,8 @@ require 'socket'
 # Length-framed transport for the Ruby worker side.
 #
 # Matches the BEAM's `{:packet, 4}` framing exactly: a 4-byte big-endian
-# length prefix followed by that many bytes of MessagePack-encoded envelope.
+# length prefix followed by that many bytes of envelope, encoded with the
+# selected codec (`Portals::Codec`).
 # `FramedSocket` hides that framing so callers only ever see whole
 # envelopes. `FramedStdio` is the fallback for platforms without Unix-socket
 # support.

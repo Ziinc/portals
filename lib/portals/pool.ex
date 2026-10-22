@@ -120,7 +120,8 @@ defmodule Portals.Pool do
         :connect_timeout,
         :handshake_timeout,
         :callback_allowlist,
-        :message_envelope
+        :message_envelope,
+        :codec
       ])
 
     state = %__MODULE__{

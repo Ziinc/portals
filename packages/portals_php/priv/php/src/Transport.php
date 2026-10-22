@@ -8,8 +8,8 @@ namespace Portals;
  * Length-framed transport for the PHP worker side.
  *
  * Matches the BEAM's `{:packet, 4}` framing exactly: a 4-byte big-endian
- * length prefix followed by that many bytes of MessagePack-encoded
- * envelope. Both directions are non-blocking and driven by the `Loop`:
+ * length prefix followed by that many bytes of encoded envelope (see
+ * `Codec`). Both directions are non-blocking and driven by the `Loop`:
  * inbound bytes are reassembled into whole frames and handed to the
  * `onFrame` callback as they complete, and outbound frames are buffered and
  * flushed whenever the stream is writable, so a slow peer never blocks a

@@ -78,10 +78,11 @@ module Portals
     def inspect = "Portals::ImproperList(#{@items.inspect} | #{@tail.inspect})"
   end
 
-  # Wrapper forcing MessagePack `bin` encoding for a String that happens to
-  # carry a text encoding (protocol/v1.md §5.2). Decoded `bin` payloads come
-  # back as BINARY-encoded Strings, which re-encode as `bin` without a
-  # wrapper; this exists for the explicit case.
+  # Wrapper forcing byte-buffer encoding (MessagePack `bin`, ETF's
+  # `%Portals.Codec.Bin{}`) for a String that happens to carry a text
+  # encoding (protocol/v1.md §5.2, §5.4). Decoded byte buffers come back as
+  # BINARY-encoded Strings, which re-encode as bytes without a wrapper; this
+  # exists for the explicit case.
   class Bin
     attr_reader :data
 
@@ -95,7 +96,8 @@ module Portals
     def hash = [Bin, @data].hash
   end
 
-  # Forces MessagePack float64 encoding for an integral Ruby value.
+  # Forces float encoding (MessagePack float64, ETF `NEW_FLOAT_EXT`) for an
+  # integral Ruby value.
   class Float64
     attr_reader :value
 

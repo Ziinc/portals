@@ -3,10 +3,10 @@
 // Length-framed transport for the Node worker side.
 //
 // Matches the BEAM's `{:packet, 4}` framing exactly: a 4-byte big-endian
-// length prefix followed by that many bytes of MessagePack-encoded
-// envelope. `FramedConnection` hides the framing so callers only ever see
-// whole envelopes, and buffers whole frames so the reader is never coupled
-// to how fast handlers run.
+// length prefix followed by that many bytes of encoded envelope (ETF or
+// MessagePack, see `codec.js`). `FramedConnection` hides the framing so
+// callers only ever see whole envelopes, and buffers whole frames so the
+// reader is never coupled to how fast handlers run.
 
 const net = require('net');
 

@@ -10,8 +10,8 @@ defmodule Portals.Protocol do
 
   @version 1
 
-  # Frame tags. Every encoded frame is a MessagePack array whose first
-  # element is one of these integers.
+  # Frame tags. Every frame is a list whose first element is one of these
+  # integers.
   @frame_tags %{
     hello: 1,
     ready: 2,

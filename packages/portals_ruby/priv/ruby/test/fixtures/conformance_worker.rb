@@ -16,15 +16,16 @@ module ConformanceWorker
   # compares the result to the term it sent.
   def echo_term(value) = value
 
-  # Classify raw bytes exactly as the frame reader would. Returns the
-  # rejection reason name, or "ok" when the bytes are accepted.
+  # Classify raw bytes exactly as the frame reader would, with the codec
+  # this worker is running. Returns the rejection reason name, or "ok" when
+  # the bytes are accepted.
   def decode_reason(bytes)
-    term, rest = Portals::MsgpackCodec.decode(bytes.b, Portals::Protocol::DEFAULT_LIMITS)
+    term, rest = Portals::Codec.decode(bytes.b, Portals::Protocol::DEFAULT_LIMITS)
     return 'trailing_bytes' unless rest.empty?
 
     _ = term
     'ok'
-  rescue Portals::MsgpackCodec::DecodeError => e
+  rescue Portals::Codec::DecodeError => e
     e.reason[0].to_s
   end
 

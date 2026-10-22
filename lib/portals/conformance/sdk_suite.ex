@@ -6,11 +6,12 @@ defmodule Portals.Conformance.SDKSuite do
   be handed to it as a module, so this suite drives it over a
   language-neutral bridge instead: every SDK ships a `conformance_worker`
   fixture whose `echo_term` round-trips a term through the SDK's own codec
-  and whose `decode_reason` classifies raw bytes. The golden vectors
-  (`protocol/vectors/golden.exs`) and malformed fixtures
-  (`protocol/malformed/fixtures.exs`) are replayed against it from the same
-  source of truth the Elixir codec is checked against, so every SDK
-  classifies every fixture identically.
+  and whose `decode_reason` classifies raw bytes with the codec the worker
+  is running. The golden vectors (`protocol/vectors/golden.exs`) and the
+  codec's malformed fixtures (`protocol/malformed/`) are replayed against
+  it from the same source of truth the Elixir codecs are checked against,
+  so every SDK classifies every fixture identically. Use the suite once per
+  codec.
 
       defmodule PortalsRuby.ConformanceTest do
         use Portals.Conformance.SDKSuite,
@@ -35,6 +36,8 @@ defmodule Portals.Conformance.SDKSuite do
       stdio fallback transport. The suite adds `transport: :stdio`.
     * `:bad_version_worker` (required) — a worker that advertises protocol
       version 999 in its `HELLO`.
+    * `:codec` — `:etf` (the default) or `:msgpack`; added to every worker's
+      options.
     * `:moduletag` — extra module tags for every test in the suite, e.g.
       `[runtime: :deno]`.
 
@@ -43,10 +46,26 @@ defmodule Portals.Conformance.SDKSuite do
   """
 
   # How every SDK without a BEAM atom table must classify each malformed
-  # fixture. `unsafe_atom_extension` is the one documented divergence:
-  # protocol/v1.md 5.3 explicitly permits SDKs to decode atom text as a
-  # native symbol, since the atom-table exhaustion risk is BEAM-specific.
-  @expected_reasons %{
+  # fixture. The unknown-atom fixtures are the one documented divergence
+  # from the BEAM: protocol/v1.md 5.3 explicitly permits SDKs to decode atom
+  # text as a native symbol, since the atom-table exhaustion risk is
+  # BEAM-specific.
+  @etf_expected_reasons %{
+    "etf_empty_binary" => "truncated",
+    "etf_missing_version_byte" => "invalid_encoding",
+    "etf_truncated_list" => "truncated",
+    "etf_truncated_binary" => "truncated",
+    "etf_unknown_tag" => "invalid_encoding",
+    "etf_oversized_list_length" => "max_length_exceeded",
+    "etf_unknown_atom" => "ok",
+    "etf_trailing_bytes" => "trailing_bytes",
+    "etf_binary_not_utf8" => "invalid_encoding",
+    "etf_bit_binary" => "invalid_encoding",
+    "etf_nesting_too_deep" => "max_depth_exceeded",
+    "etf_truncated_stream_data_chunk" => "truncated"
+  }
+
+  @msgpack_expected_reasons %{
     "truncated_fixarray" => "truncated",
     "truncated_str8_header" => "truncated",
     "truncated_str8_body" => "truncated",
@@ -60,9 +79,10 @@ defmodule Portals.Conformance.SDKSuite do
     "truncated_credit_frame" => "truncated"
   }
 
-  @doc "The `decode_reason` every SDK must report for each malformed fixture."
-  @spec expected_reasons() :: %{String.t() => String.t()}
-  def expected_reasons, do: @expected_reasons
+  @doc "The `decode_reason` every SDK must report for each of `codec`'s malformed fixtures."
+  @spec expected_reasons(:etf | :msgpack) :: %{String.t() => String.t()}
+  def expected_reasons(:etf), do: @etf_expected_reasons
+  def expected_reasons(:msgpack), do: @msgpack_expected_reasons
 
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
@@ -75,10 +95,11 @@ defmodule Portals.Conformance.SDKSuite do
 
       alias Portals.Conformance.Runner
 
-      @language Keyword.fetch!(opts, :language)
-      @worker_opts Keyword.fetch!(opts, :worker)
-      @stdio_worker_opts Keyword.fetch!(opts, :stdio_worker)
-      @bad_version_worker_opts Keyword.fetch!(opts, :bad_version_worker)
+      @codec Keyword.get(opts, :codec, :etf)
+      @language "#{Keyword.fetch!(opts, :language)} (#{@codec})"
+      @worker_opts Keyword.fetch!(opts, :worker) ++ [codec: @codec]
+      @stdio_worker_opts Keyword.fetch!(opts, :stdio_worker) ++ [codec: @codec]
+      @bad_version_worker_opts Keyword.fetch!(opts, :bad_version_worker) ++ [codec: @codec]
 
       defp start_conformance_worker(opts) do
         {:ok, conn} = Portals.start_worker(opts)
@@ -104,7 +125,7 @@ defmodule Portals.Conformance.SDKSuite do
       test "#{@language}: every malformed fixture is classified like every other SDK" do
         conn = start_conformance_worker(@worker_opts)
 
-        for {fixture_name, bytes, _expected_beam_reason} <- Runner.malformed_fixtures() do
+        for {fixture_name, bytes, _expected_beam_reason} <- Runner.malformed_fixtures(@codec) do
           assert {:ok, reason} =
                    Portals.call(
                      conn,
@@ -115,7 +136,10 @@ defmodule Portals.Conformance.SDKSuite do
                    )
 
           assert reason ==
-                   Map.fetch!(Portals.Conformance.SDKSuite.expected_reasons(), fixture_name),
+                   Map.fetch!(
+                     Portals.Conformance.SDKSuite.expected_reasons(@codec),
+                     fixture_name
+                   ),
                  "#{@language} classified #{fixture_name} as #{inspect(reason)}"
         end
 

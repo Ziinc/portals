@@ -362,9 +362,10 @@ QuickJS, see the note above.
   which doesn't mix with `number` arithmetic. Integral floats encode as
   integers unless wrapped in `portals.float()`.
 - **Wrap raw bytes in `%Portals.Codec.Bin{}`.** A plain Elixir binary that
-  is not valid UTF-8 is decoded as a string with the invalid bytes replaced
-  by U+FFFD, so the data is silently corrupted. Wrapped bytes arrive as a
-  `Buffer`.
+  is not valid UTF-8 makes the worker reject the call before it runs, so
+  the call times out (under `codec: :msgpack` it is instead decoded as a
+  string with the invalid bytes replaced by U+FFFD). Wrapped bytes arrive
+  as a `Buffer`.
 - **`console.log` goes nowhere.** stdout and stderr are discarded under the
   default transport (on QuickJS, console output goes to stderr). Set
   `PORTALS_LOG_FILE`, or pass `logger: (message) => ...` to

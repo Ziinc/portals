@@ -106,6 +106,12 @@ Linux is the supported platform. See
 [docs/prd.md](https://github.com/Ziinc/portals/blob/main/docs/prd.md) for the
 roadmap.
 
+[bench/](https://github.com/Ziinc/portals/blob/main/bench/README.md) compares
+Portals with ErlPort and zerorpc, and its codecs and transports with the
+alternatives, with results. In short: ErlPort is about twice as fast on
+small calls (the Python worker's thread pool costs ~80 µs per call), and
+Portals over ETF, its default codec, is the fastest on large binaries.
+
 ## Repository layout
 
 ```text
@@ -117,6 +123,7 @@ packages/portals_<language>/
   priv/<language>/     the bundled worker SDK, with its own unit tests
   test/                the shared conformance suites run against that SDK
 examples/hello_live/   a Phoenix LiveView app calling every language and JS runtime
+bench/                 benchmarks against ETF, zerorpc, ErlPort and other codecs/transports
 scripts/               test_all.sh, version.exs, release.sh, hex_dry_run.sh, publish_hex.sh
 ```
 

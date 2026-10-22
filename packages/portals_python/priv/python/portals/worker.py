@@ -28,7 +28,7 @@ from typing import Optional
 
 from . import protocol as p
 from .errors import build_error_map, overload_error_map
-from .msgpack_codec import DecodeError, decode, encode
+from .codec import DecodeError, decode, encode
 from .streams import FRAME_PREFIX_BYTES as STREAM_FRAME_PREFIX_BYTES
 from .streams import Stream, StreamProtocolError, is_stream_handler
 from .transport import ConnectionClosed, FramedSocket, FramedStdio, socket_path_from_argv

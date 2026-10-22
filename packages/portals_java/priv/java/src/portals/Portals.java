@@ -7,8 +7,9 @@ import java.util.List;
  * {@code CALL}.
  *
  * <p>Full parity with the Python, Ruby and Node SDKs: Unix-socket transport
- * with a framed stdio fallback, a dependency-free MessagePack codec
- * including the Erlang value extensions, the exact-version HELLO/READY
+ * with a framed stdio fallback, dependency-free Erlang External Term Format
+ * (the default) and MessagePack codecs selected by {@code PORTALS_CODEC},
+ * the exact-version HELLO/READY
  * handshake, concurrent arbitrary module/function dispatch, structured
  * error frames, reentrant callbacks, PID messaging, cooperative
  * cancellation, and bidirectional streaming with byte-credit windows,
