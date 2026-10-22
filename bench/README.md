@@ -13,6 +13,8 @@ on the same interpreter.
 | Transports | `transports.exs` | Raw frame round trips with no codec: Unix socket, TCP loopback, stdio Port, ZeroMQ |
 | BEAM codecs | `codecs.exs` | Encode + decode of one frame on the BEAM: Portals MessagePack, ETF, Msgpax, Jason |
 | Python codecs | `python/codec_bench.py` | The same on the Python side: Portals MessagePack and ETF, ErlPort's ETF, msgpack (C), pickle, json |
+| Memory | `memory.exs` | A one-shot snapshot of caller, `Portals.Connection` and worker RSS after 1,000 calls (not a Benchee suite) |
+| Open-loop load | `open_loop_load.exs` | Calls fired at a fixed rate (not "as fast as possible") against a pool of 4, to see queueing/backpressure under a target rate |
 
 The workloads are an `add(1, 2)` call and `echo` of 1 KiB of text, 64 KiB
 and 1 MiB of random bytes, a list of 1,000 integers and a list of 100

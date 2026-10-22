@@ -95,7 +95,9 @@ defmodule Portals.MixProject do
 
   defp deps do
     [
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:telemetry, "~> 1.2"},
+      {:stream_data, "~> 0.6", only: [:dev, :test]}
     ]
   end
 end
