@@ -13,6 +13,10 @@
 // other in-flight calls. Concurrency is bounded by the `max_concurrency`
 // advertised in `HELLO`, with streams held to a separate `max_streams`
 // budget so long-lived streams cannot consume unary capacity.
+//
+// The one exception is an inline `CALL` (protocol/v1.md §7.1): the reader
+// awaits it and sends its RETURN/ERROR before acting on any later frame,
+// which stays buffered in the connection meanwhile.
 
 const path = require('path');
 const fs = require('fs');
@@ -38,9 +42,9 @@ class ProtocolError extends Error {}
 
 class CallbackTimeout extends Error {}
 
-// Per-call context: reentrancy depth, deadline, and a cooperative
-// cancellation flag, all visible to the handler without threading an extra
-// argument through user code.
+// Per-call context: reentrancy depth, deadline, a cooperative cancellation
+// flag, and whether the call runs inline, all visible to the handler
+// without threading an extra argument through user code.
 const callContext = new AsyncLocalStorage();
 
 // Mark a function as a streaming target. The BEAM's `open_stream/5`
@@ -123,8 +127,10 @@ class Worker {
         if (payload === null) break;
 
         // Deliberately not awaited: the reader must stay independent of
-        // handler execution.
-        this.handleFrame(payload);
+        // handler execution. Only an inline CALL returns a promise, and no
+        // later frame may be acted on until it has replied.
+        const inline = this.handleFrame(payload);
+        if (inline) await inline;
       }
     } finally {
       if (activeWorker === this) activeWorker = null;
@@ -166,6 +172,11 @@ class Worker {
   // -- Reentrant callbacks and messaging --------------------------------
 
   callCallback(moduleName, functionName, args = [], timeoutMs = null) {
+    const context = callContext.getStore();
+    if (context && context.inline) {
+      // The reply could never be read: nothing reads frames until this call returns.
+      throw new Error('portals.callback() is unavailable in an inline call');
+    }
     const depth = Worker.currentCallbackDepth() + 1;
     this._callbackId += 1;
     const id = this._callbackId;
@@ -206,6 +217,7 @@ class Worker {
 
   // -- Frame dispatch ---------------------------------------------------
 
+  // Returns a promise only for an inline CALL, settling once it has replied.
   handleFrame(payload) {
     let envelope;
     let rest;
@@ -229,8 +241,7 @@ class Worker {
 
     switch (tag) {
       case p.CALL:
-        this.submitCall(envelope.slice(1));
-        break;
+        return this.submitCall(envelope.slice(1));
       case p.CANCEL:
         this.cancelRequest(envelope[1]);
         break;
@@ -267,29 +278,33 @@ class Worker {
       default:
         this.log(`portals worker: ignoring unsupported frame tag ${tag}`);
     }
+    return undefined;
   }
 
   // -- Dispatch ---------------------------------------------------------
 
   // Route a CALL to the unary budget, or — when its target was registered
   // with `streamHandler` — to the separate stream budget with a `Stream`
-  // bound to the call's request_id.
+  // bound to the call's request_id. An inline unary call (`fields[6]`) runs
+  // at once, outside the unary budget, and its promise is returned so the
+  // reader can wait for it; a stream is never inline.
   submitCall(fields) {
     const [requestId, moduleName, functionName] = fields;
     const target = this.resolveQuietly(moduleName, functionName);
 
     if (!isStreamHandler(target)) {
+      if (fields[6] === true) return this.executeUnary(fields, true);
       this.enqueueUnary(fields);
-      return;
+      return undefined;
     }
 
     if (this.maxStreams <= 0) {
       this.sendEnvelope([p.ERROR, requestId, overloadErrorMap('worker advertises no streams')]);
-      return;
+      return undefined;
     }
     if (this._streams.size >= this.maxStreams) {
       this.sendEnvelope([p.ERROR, requestId, overloadErrorMap('max_streams exceeded')]);
-      return;
+      return undefined;
     }
 
     const stream = new Stream(
@@ -305,6 +320,7 @@ class Worker {
     if (grant > 0) this.sendEnvelope([p.CREDIT, requestId, grant, 0]);
 
     this.dispatchStreamCall(stream, target, fields);
+    return undefined;
   }
 
   async dispatchStreamCall(stream, target, fields) {
@@ -334,8 +350,23 @@ class Worker {
 
   async runUnary(fields) {
     this._activeCalls += 1;
+    try {
+      await this.executeUnary(fields, false);
+    } finally {
+      this._activeCalls -= 1;
+      const next = this._callQueue.shift();
+      if (next) this.runUnary(next);
+    }
+  }
+
+  // Run one unary CALL (4 to 7 fields: request_id, module, function, args,
+  // then optional deadline_ms, callback_depth and inline) to completion and
+  // send its RETURN or ERROR.
+  async executeUnary(fields, inline) {
     const [requestId, moduleName, functionName, args, deadlineMs, depth] = fields;
-    const context = { depth: depth ?? 0, deadlineMs: deadlineMs ?? null, cancelled: false };
+    const context = {
+      depth: depth ?? 0, deadlineMs: deadlineMs ?? null, cancelled: false, inline,
+    };
     this._pendingUnary.set(requestId, context);
 
     try {
@@ -346,9 +377,6 @@ class Worker {
       this.sendEnvelope([p.ERROR, requestId, buildErrorMap(err)]);
     } finally {
       this._pendingUnary.delete(requestId);
-      this._activeCalls -= 1;
-      const next = this._callQueue.shift();
-      if (next) this.runUnary(next);
     }
   }
 

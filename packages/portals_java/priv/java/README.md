@@ -141,7 +141,10 @@ Java types under either.
 
 Unary calls run on a fixed pool of `maxConcurrency` threads and streams on
 a separate pool of `maxStreams` threads, so neither budget can starve the
-other; the socket reader never runs a handler. Cancellation is cooperative:
+other; the socket reader never runs a handler, except an inline call
+(`inline: true` on the BEAM, protocol/v1.md section 7.1), which runs on the
+reader before any later frame is read and cannot use `Portals.callback`
+(it throws at once). Cancellation is cooperative:
 poll `Portals.isCancelled()`. Cancelling a stream unblocks its handler's
 pending `send`/`recv`.
 

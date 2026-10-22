@@ -27,6 +27,7 @@ type Call struct {
 	deadlineMS  int64
 	hasDeadline bool
 	depth       int64
+	inline      bool
 }
 
 // Context is cancelled when the BEAM sends CANCEL for this call (or
@@ -58,7 +59,8 @@ func (c *Call) CallbackDepth() int64 { return c.depth }
 // Callback calls module.function back on the BEAM and blocks this
 // handler's goroutine (never the socket reader) for the result. It gives
 // up when the call's context is cancelled. A failing BEAM-side target is
-// returned as an *Error.
+// returned as an *Error. Inside an inline call (protocol/v1.md section 7.1)
+// it fails at once with ErrInlineCallback.
 func (c *Call) Callback(module, function string, args ...any) (any, error) {
 	return c.CallbackContext(c.ctx, module, function, args...)
 }
@@ -66,6 +68,9 @@ func (c *Call) Callback(module, function string, args ...any) (any, error) {
 // CallbackContext is Callback bounded by ctx instead of the call's own
 // context, e.g. to apply a timeout.
 func (c *Call) CallbackContext(ctx context.Context, module, function string, args ...any) (any, error) {
+	if c.inline {
+		return nil, ErrInlineCallback
+	}
 	if args == nil {
 		args = []any{}
 	}

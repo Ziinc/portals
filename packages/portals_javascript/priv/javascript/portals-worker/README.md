@@ -81,6 +81,13 @@ is `require`d relative to the configured `modulePaths` (default
 `[process.cwd()]`). The function may be sync or async; a returned Promise is
 awaited before the terminal `RETURN`.
 
+Calls run concurrently, up to `maxConcurrency`. A call made with the BEAM's
+`inline: true` option (`CALL`'s optional 7th field, protocol/v1.md §7.1) is
+the exception: the worker runs it at once and acts on no later frame (they
+stay buffered) until it has replied, even while an async handler awaits.
+Calls already running carry on. `portals.callback()` throws at once inside
+an inline call. Handlers need no changes to be called inline.
+
 ## Handler context
 
 | Helper | Meaning |

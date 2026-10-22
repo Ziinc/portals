@@ -101,6 +101,7 @@ defmodule Portals.Connection do
           {:ok, Request.t()} | {:error, Error.t()}
   def async(conn, module, function, args, opts \\ []) do
     deadline = Keyword.get(opts, :deadline_ms)
+    inline = Keyword.get(opts, :inline, false)
     detached = Keyword.get(opts, :detach, false)
     caller = Keyword.get(opts, :caller, self())
     pool_notify = Keyword.get(opts, :pool_notify)
@@ -112,7 +113,8 @@ defmodule Portals.Connection do
 
     GenServer.call(
       conn,
-      {:dispatch, module, function, args, deadline, callback_depth, caller, detached, pool_notify}
+      {:dispatch, module, function, args, {deadline, callback_depth, inline}, caller, detached,
+       pool_notify}
     )
   end
 
@@ -185,7 +187,7 @@ defmodule Portals.Connection do
 
   @impl true
   def handle_call(
-        {:dispatch, _m, _f, _a, _d, _cd, _caller, _detach, _pool_notify},
+        {:dispatch, _m, _f, _a, _trailer, _caller, _detach, _pool_notify},
         _from,
         %{status: :closed} = state
       ) do
@@ -193,25 +195,14 @@ defmodule Portals.Connection do
   end
 
   def handle_call(
-        {:dispatch, module, function, args, deadline, callback_depth, caller, detached,
-         pool_notify},
+        {:dispatch, module, function, args, trailer, caller, detached, pool_notify},
         _from,
         state
       ) do
     if map_size(state.pending) >= state.limits.max_in_flight_requests do
       {:reply, {:error, Error.new(:overload, "max_in_flight_requests exceeded")}, state}
     else
-      do_dispatch(
-        state,
-        module,
-        function,
-        args,
-        deadline,
-        callback_depth,
-        caller,
-        detached,
-        pool_notify
-      )
+      do_dispatch(state, module, function, args, trailer, caller, detached, pool_notify)
     end
   end
 
@@ -282,14 +273,13 @@ defmodule Portals.Connection do
          module,
          function,
          args,
-         deadline,
-         callback_depth,
+         {deadline, callback_depth, inline},
          caller,
          detached,
          pool_notify
        ) do
     id = state.next_request_id
-    trailer = call_trailer(deadline, callback_depth)
+    trailer = call_trailer(deadline, callback_depth, inline)
     frame = [Protocol.frame_tag(:call), id, module, function, args | trailer]
 
     case send_frame(state, frame) do
@@ -592,7 +582,7 @@ defmodule Portals.Connection do
 
   defp do_open_stream(state, module, function, args, deadline, callback_depth, owner) do
     id = state.next_request_id
-    trailer = call_trailer(deadline, callback_depth)
+    trailer = call_trailer(deadline, callback_depth, false)
     frame = [Protocol.frame_tag(:call), id, module, function, args | trailer]
     state = %{state | next_request_id: id + 1}
 
@@ -901,8 +891,11 @@ defmodule Portals.Connection do
     end
   end
 
-  defp call_trailer(deadline, 0), do: opt_deadline(deadline)
-  defp call_trailer(deadline, depth) when depth > 0, do: [deadline, depth]
+  # Optional CALL fields are positional, so a later one fills in the
+  # earlier ones (protocol/v1.md section 3).
+  defp call_trailer(deadline, depth, true), do: [deadline, depth, true]
+  defp call_trailer(deadline, 0, false), do: opt_deadline(deadline)
+  defp call_trailer(deadline, depth, false) when depth > 0, do: [deadline, depth]
 
   defp opt_deadline(nil), do: []
   defp opt_deadline(ms), do: [ms]

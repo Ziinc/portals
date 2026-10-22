@@ -29,6 +29,13 @@ suspends only its own fiber, so the socket reader keeps reading frames and
 other in-flight calls keep completing. `max_concurrency` and `max_streams`
 bound how many fibers run at once, independently.
 
+A call made with `inline: true` (`protocol/v1.md` section 7.1) skips the
+fiber: it runs to completion on the socket reader itself, outside the
+`max_concurrency` budget, before any further frame is read. Fibers already
+running stay suspended meanwhile and carry on afterwards. Handlers need no
+changes, but `Portals\callback()` throws at once inside an inline call (its
+reply could never be read) and `Portals\sleep()` blocks the reader there.
+
 Because scheduling is cooperative, a handler that blocks the whole
 process — native `sleep()`/`usleep()`, blocking I/O, a long CPU loop —
 stalls every other call until it returns. Use `Portals\sleep()` to wait,

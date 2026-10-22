@@ -14,7 +14,9 @@ namespace Portals;
  * result. Suspends only this handler's fiber, never the socket reader, so
  * a nested CALL dispatched back into this worker while the callback is
  * outstanding is still served. Throws `RemoteError` if the BEAM-side
- * handler fails, `TimeoutError` after `$timeout` seconds.
+ * handler fails, `TimeoutError` after `$timeout` seconds. Inside an inline
+ * CALL it throws at once: no frame (so no reply) is read until that call
+ * returns.
  */
 function callback(string $module, string $function, array $args = [], ?float $timeout = null): mixed
 {

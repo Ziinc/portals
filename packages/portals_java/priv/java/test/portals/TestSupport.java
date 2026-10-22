@@ -19,7 +19,7 @@ public final class TestSupport {
   }
 
   public static void main(String[] args) throws Exception {
-    Class<?>[] suites = {EtfCodecTest.class, MsgpackCodecTest.class, StreamTest.class, WorkerTest.class};
+    Class<?>[] suites = {EtfCodecTest.class, MsgpackCodecTest.class, StreamTest.class, WorkerTest.class, InlineCallTest.class};
     int passed = 0;
     int failed = 0;
     for (Class<?> suite : suites) {

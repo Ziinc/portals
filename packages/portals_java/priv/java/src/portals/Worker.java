@@ -37,12 +37,14 @@ import java.util.function.Consumer;
  * }
  * }</pre>
  *
- * <p>The socket reader is the thread that called {@link #run}, and it never
- * executes a handler: each {@code CALL} is handed to a bounded thread pool,
- * so a slow or blocked handler can never stall reading further frames or
- * responding to other in-flight calls. Streams run on their own pool sized
- * by {@code max_streams}, so long-lived streams cannot consume unary
- * capacity.
+ * <p>The socket reader is the thread that called {@link #run}. Each
+ * {@code CALL} is handed to a bounded thread pool, so a slow or blocked
+ * handler can never stall reading further frames or responding to other
+ * in-flight calls. Streams run on their own pool sized by
+ * {@code max_streams}, so long-lived streams cannot consume unary capacity.
+ * The one exception is an inline call (protocol/v1.md §7.1): a unary
+ * {@code CALL} whose {@code inline} field is true runs on the reader itself,
+ * and no further frame is read until it has replied; it cannot call back.
  *
  * <p>Fully reentrant callbacks (protocol/v1.md §8): a handler may call back
  * into the BEAM with {@link Portals#callback}, which blocks the handler's
@@ -76,7 +78,7 @@ public final class Worker {
 
   private volatile Limits limits = Limits.DEFAULT;
   private Codec codec = Codec.ETF;
-  private FramedConnection conn;
+  FramedConnection conn;
   private ExecutorService callPool;
   private ExecutorService streamPool;
   private volatile boolean shutdown;
@@ -92,11 +94,13 @@ public final class Worker {
   static final class CallContext {
     final long depth;
     final Long deadlineMs;
+    final boolean inline;
     final AtomicBoolean cancelled = new AtomicBoolean();
 
-    CallContext(long depth, Long deadlineMs) {
+    CallContext(long depth, Long deadlineMs, boolean inline) {
       this.depth = depth;
       this.deadlineMs = deadlineMs;
+      this.inline = inline;
     }
   }
 
@@ -328,6 +332,11 @@ public final class Worker {
   // -- Reentrant callbacks and messaging ------------------------------------
 
   Object callCallback(String module, String function, List<?> args, long timeoutMs) throws InterruptedException {
+    CallContext context = CONTEXT.get();
+    if (context != null && context.inline) {
+      // The reply could never be read: nothing reads frames until this call returns.
+      throw new PortalsException("portals callback is unavailable in an inline call");
+    }
     long depth = currentCallbackDepth() + 1;
     long id = callbackIds.incrementAndGet();
     CompletableFuture<Object> future = new CompletableFuture<>();
@@ -421,9 +430,10 @@ public final class Worker {
   // -- Dispatch -------------------------------------------------------------
 
   /**
-   * Routes a CALL to the unary pool, or — when its target is a stream
-   * handler — to the separate stream pool with a {@link Stream} bound to
-   * the call's request_id.
+   * Routes a CALL to the unary pool (or, when its {@code inline} field is
+   * true, runs it right here on the reader thread), or — when its target is
+   * a stream handler — to the separate stream pool with a {@link Stream}
+   * bound to the call's request_id. A stream is never inline.
    */
   private void submitCall(List<Object> fields) {
     Object requestId = field(fields, 0);
@@ -432,13 +442,18 @@ public final class Worker {
     List<Object> args = field(fields, 3) instanceof List<?> list ? castList(list) : List.of();
     Long deadlineMs = field(fields, 4) instanceof Number n ? n.longValue() : null;
     long depth = asLong(field(fields, 5), 0);
+    boolean inline = Boolean.TRUE.equals(field(fields, 6));
 
     Target target = resolveQuietly(module, function);
 
     if (target == null || !target.isStream()) {
-      CallContext context = new CallContext(depth, deadlineMs);
+      CallContext context = new CallContext(depth, deadlineMs, inline);
       pendingUnary.put(requestId, context);
-      callPool.execute(() -> runUnary(requestId, module, function, args, context));
+      if (inline) {
+        runUnary(requestId, module, function, args, context);
+      } else {
+        callPool.execute(() -> runUnary(requestId, module, function, args, context));
+      }
       return;
     }
 
@@ -470,7 +485,7 @@ public final class Worker {
     long grant = stream.initialGrant();
     if (grant > 0) sendEnvelope(Arrays.asList(Protocol.CREDIT, requestId, grant, 0));
 
-    CallContext context = new CallContext(depth, deadlineMs);
+    CallContext context = new CallContext(depth, deadlineMs, false);
     streamPool.execute(() -> runStream(stream, target, args, context));
   }
 

@@ -38,6 +38,10 @@ final class CallContext
  * the whole process — a native `sleep()`, blocking I/O, a long CPU loop —
  * stalls every other call until it returns. Use `Portals\sleep()` instead
  * of `sleep()`/`usleep()`.
+ *
+ * The one exception is an inline CALL (`protocol/v1.md` section 7.1): it
+ * runs to completion on the reader itself, outside any fiber, and its
+ * RETURN/ERROR is queued before the next frame is acted on.
  */
 final class Worker
 {
@@ -66,6 +70,8 @@ final class Worker
     private array $pendingCallbacks = [];
     /** @var \WeakMap<\Fiber, CallContext> */
     private \WeakMap $contexts;
+    /** Context of the inline CALL running on the reader, if any. */
+    private ?CallContext $inlineContext = null;
     /** @var callable(string): void */
     private $log;
     private ?FramedConnection $conn = null;
@@ -198,6 +204,10 @@ final class Worker
 
     public function callCallback(string $module, string $function, array $args = [], ?float $timeout = null): mixed
     {
+        if ($this->inlineContext !== null) {
+            // The reply could never be read: nothing reads frames until this call returns.
+            throw new \RuntimeException('Portals\\callback() is unavailable in an inline call');
+        }
         if (\Fiber::getCurrent() === null) {
             throw new \LogicException('Portals\\callback() must be called from within a CALL handler');
         }
@@ -221,6 +231,9 @@ final class Worker
 
     public function currentContext(): ?CallContext
     {
+        if ($this->inlineContext !== null) {
+            return $this->inlineContext;
+        }
         $fiber = \Fiber::getCurrent();
         return $fiber === null ? null : ($this->contexts[$fiber] ?? null);
     }
@@ -308,7 +321,9 @@ final class Worker
     /**
      * Route a CALL to the unary budget, or — when its target is marked
      * `#[StreamHandler]` — to the separate stream budget with a `Stream`
-     * bound to the call's request_id.
+     * bound to the call's request_id. A unary CALL whose 7th field
+     * (`inline`) is `true` runs right here on the reader instead; a stream
+     * is never inline.
      */
     private function submitCall(array $fields): void
     {
@@ -322,7 +337,11 @@ final class Worker
         }
 
         if (!$isStream) {
-            $this->enqueueUnary($fields);
+            if (($fields[6] ?? null) === true) {
+                $this->runInline($fields);
+            } else {
+                $this->enqueueUnary($fields);
+            }
             return;
         }
 
@@ -412,6 +431,28 @@ final class Worker
                 $next = $this->callQueue->dequeue();
                 $this->loop->spawn(fn () => $this->runUnary($next));
             }
+        }
+    }
+
+    /**
+     * Run an inline CALL to completion on the reader, outside any fiber and
+     * outside the `max_concurrency` budget: no further frame is read until
+     * its RETURN/ERROR is queued. Fibers already running stay suspended
+     * meanwhile and carry on afterwards.
+     */
+    private function runInline(array $fields): void
+    {
+        [$requestId, $module, $function, $args, $deadlineMs, $depth] = $fields + [null, null, null, [], null, 0];
+        $this->inlineContext = new CallContext(\is_int($depth) ? $depth : 0, $deadlineMs);
+
+        try {
+            [$target] = $this->resolveTarget($module, $function);
+            $result = $target(...$this->argList($args));
+            $this->inlineContext = null;
+            $this->sendEnvelope([Protocol::RETURN, $requestId, $result]);
+        } catch (\Throwable $e) {
+            $this->inlineContext = null;
+            $this->sendEnvelope([Protocol::ERROR, $requestId, Errors::buildErrorMap($e)]);
         }
     }
 
